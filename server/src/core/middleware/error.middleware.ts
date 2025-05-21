@@ -1,5 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import { logger } from '../config/logger';
+// server/src/core/middleware/error.middleware.ts
+
+import { Request, Response } from 'express';
 
 export class HttpException extends Error {
   status: number;
@@ -15,13 +16,11 @@ export class HttpException extends Error {
 export const errorHandler = (
   error: HttpException,
   req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
+  res: Response): void => {
   const status = error.status || 500;
   const message = error.message || 'Errore interno del server';
 
-  logger.error(`[${req.method}] ${req.path} >> StatusCode: ${status}, Message: ${message}`);
+  console.error(`[${req.method}] ${req.path} >> StatusCode: ${status}, Message: ${message}`);
   
   res.status(status).json({
     success: false,

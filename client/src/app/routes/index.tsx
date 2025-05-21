@@ -1,8 +1,11 @@
+// client/src/app/routes/index.tsx
+
 import { Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { routes } from './routes';
 import ProtectedRoute from './ProtectedRoute';
 import { CircularProgress, Box } from '@mui/material';
+import MainLayout from '../layout/MainLayout';
 
 const AppRoutes = () => {
   return (
@@ -17,21 +20,30 @@ const AppRoutes = () => {
         {routes.map((route) => {
           const Element = route.element;
           
-          return (
-            <Route
-              key={route.path}
-              path={route.path}
-              element={
-                route.protected ? (
+          if (route.protected) {
+            return (
+              <Route
+                key={route.path}
+                path={route.path}
+                element={
                   <ProtectedRoute>
-                    <Element />
+                    <MainLayout>
+                      <Element />
+                    </MainLayout>
                   </ProtectedRoute>
-                ) : (
-                  <Element />
-                )
-              }
-            />
-          );
+                }
+              />
+            );
+          } else {
+            // Le route pubbliche non hanno il MainLayout
+            return (
+              <Route
+                key={route.path}
+                path={route.path}
+                element={<Element />}
+              />
+            );
+          }
         })}
       </Routes>
     </Suspense>

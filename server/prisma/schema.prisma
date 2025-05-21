@@ -34,6 +34,8 @@ model Client {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   basins        Basin[]
+  sentOrders       PickupOrder[] @relation("SenderOrders")
+  receivedOrders   PickupOrder[] @relation("RecipientOrders")
 }
 
 model Basin {
@@ -45,4 +47,30 @@ model Basin {
   client      Client   @relation(fields: [clientId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+   pickupOrders     PickupOrder[]
+}
+
+model PickupOrder {
+  id               String    @id @default(uuid())
+  orderNumber      String    @unique
+  issueDate        DateTime
+  scheduledDate    DateTime?
+  completionDate   DateTime?
+  shipperId        String?
+  senderId         String
+  sender           Client    @relation(name: "SenderOrders", fields: [senderId], references: [id])
+  recipientId      String
+  recipient        Client    @relation(name: "RecipientOrders", fields: [recipientId], references: [id])
+  basinId          String
+  basin            Basin     @relation(fields: [basinId], references: [id])
+  flowType         String
+  distanceKm       Float?
+  status           String    @default("PENDING") // PENDING, SCHEDULED, READY, COMPLETED, CANCELLED
+  expectedQuantity Float?
+  actualQuantity   Float?
+  destinationQuantity Float?
+  notes            String?
+  documents        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }

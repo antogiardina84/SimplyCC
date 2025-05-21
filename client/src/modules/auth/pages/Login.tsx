@@ -1,7 +1,10 @@
+// client/src/modules/auth/pages/Login.tsx
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Container, Box, Typography, TextField, Button, Paper } from '@mui/material';
+import { Container, Box, Typography, TextField, Button, Paper, Alert } from '@mui/material';
 import { useForm } from 'react-hook-form';
+import * as authService from '../services/authService';
 
 interface LoginForm {
   email: string;
@@ -11,20 +14,19 @@ interface LoginForm {
 const Login = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>();
   
   const onSubmit = async (data: LoginForm) => {
     try {
       setLoading(true);
-      // Qui andrà la chiamata API di login
-      console.log('Login data:', data);
+      setError(null);
       
-      // Mock login - Rimuovere in produzione
-      localStorage.setItem('token', 'fake_token');
-      
+      await authService.login(data);
       navigate('/');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login failed:', error);
+      setError(error.response?.data?.message || 'Si è verificato un errore durante il login');
     } finally {
       setLoading(false);
     }
@@ -37,6 +39,13 @@ const Login = () => {
           <Typography component="h1" variant="h5" sx={{ mb: 3, textAlign: 'center' }}>
             Accedi
           </Typography>
+          
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+          
           <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ mt: 1 }}>
             <TextField
               margin="normal"

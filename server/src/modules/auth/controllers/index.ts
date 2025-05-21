@@ -1,20 +1,40 @@
+// server/src/modules/auth/controllers/index.ts
+
 import { Request, Response, NextFunction } from 'express';
 import { HttpException } from '../../../core/middleware/error.middleware';
+import * as authService from '../services/auth.service';
+import { logger } from '../../../core/config/logger';
 
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Implementare la logica di login
-    res.status(200).json({ message: 'Login API - Da implementare' });
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      throw new HttpException(400, 'Email e password sono richiesti');
+    }
+
+    const result = await authService.login(email, password);
+    
+    logger.info(`Utente loggato: ${email}`);
+    res.status(200).json(result);
   } catch (error) {
-    next(new HttpException(500, 'Errore durante il login'));
+    next(error);
   }
 };
 
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Implementare la logica di registrazione
-    res.status(201).json({ message: 'Register API - Da implementare' });
+    const { email, password, firstName, lastName } = req.body;
+
+    if (!email || !password) {
+      throw new HttpException(400, 'Email e password sono richiesti');
+    }
+
+    const result = await authService.register(email, password, firstName, lastName);
+    
+    logger.info(`Nuovo utente registrato: ${email}`);
+    res.status(201).json(result);
   } catch (error) {
-    next(new HttpException(500, 'Errore durante la registrazione'));
+    next(error);
   }
 };
