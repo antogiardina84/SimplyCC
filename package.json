@@ -1,0 +1,29 @@
+{
+  "name": "sistema-gestione-rifiuti",
+  "version": "0.1.0",
+  "description": "Sistema di gestione per il ciclo dei rifiuti conforme all'allegato tecnico ANCI-COREPLA",
+  "main": "index.js",
+  "scripts": {
+    "setup": "npm install && cd server && npm install && cd ../client && npm install && cd ../shared && mkdir -p src && cd ..",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "build:server": "cd server && npm run build",
+    "build:client": "cd client && npm run build",
+    "build": "npm run build:server && npm run build:client",
+    "test:server": "cd server && npm test",
+    "test:client": "cd client && npm test",
+    "test": "npm run test:server && npm run test:client"
+  },
+  "keywords": [
+    "rifiuti",
+    "gestione",
+    "ANCI",
+    "COREPLA"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  }
+}

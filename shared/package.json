@@ -1,0 +1,21 @@
+{
+  "name": "sistema-gestione-rifiuti-shared",
+  "version": "0.1.0",
+  "description": "Codice condiviso per il Sistema di Gestione Rifiuti",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "keywords": [
+    "shared",
+    "types"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.4.5",
+    "typescript": "^5.2.2"
+  }
+}
