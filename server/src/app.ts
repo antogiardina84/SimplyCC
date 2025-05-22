@@ -14,6 +14,7 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 4000;
 const apiPrefix = process.env.API_PREFIX || '/api';
+const host = process.env.HOST || '0.0.0.0'; // Ascolta su tutte le interfacce
 
 // Middleware
 app.use(helmet());
@@ -30,8 +31,10 @@ app.use(errorHandler);
 
 // Avvia il server
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(port, () => {
-    logger.info(`Server in esecuzione su http://localhost:${port}${apiPrefix}`);
+  const { logNetworkInfo } = require('./core/utils/network.utils');
+  
+  app.listen(port, host, () => {
+    logNetworkInfo(port, apiPrefix);
   });
 }
 

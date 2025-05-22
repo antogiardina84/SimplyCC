@@ -197,7 +197,6 @@ const PickupOrderForm = () => {
                 render={({ field }) => (
                   <FormControl fullWidth error={!!errors.senderId}>
                     <InputLabel>Mittente</InputLabel>
-                    // client/src/modules/pickupOrders/pages/PickupOrderForm.tsx (continua)
                     <Select {...field} label="Mittente">
                       {clients.map((client) => (
                         <MenuItem key={client.id} value={client.id}>

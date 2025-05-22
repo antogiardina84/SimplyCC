@@ -8,9 +8,9 @@ import {
   ListItemIcon,
   ListItemText,
   Collapse,
-  useTheme,
   useMediaQuery,
   IconButton,
+  Typography,
 } from '@mui/material';
 import {
   Dashboard,
@@ -26,6 +26,8 @@ import {
   Menu,
   Group,
   Domain,
+  Add,
+  AccountCircle,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -51,21 +53,42 @@ const menuItems: MenuItem[] = [
   {
     text: 'Gestione Utenti',
     icon: <Group />,
-    path: '/users',
+    children: [
+      {
+        text: 'Lista Utenti',
+        icon: <People />,
+        path: '/users',
+      },
+      {
+        text: 'Nuovo Utente',
+        icon: <Group />,
+        path: '/users/new',
+      },
+    ],
   },
   {
     text: 'Clienti & Bacini',
     icon: <Business />,
     children: [
       {
-        text: 'Gestione Clienti',
+        text: 'Lista Clienti',
         icon: <People />,
         path: '/clients',
       },
       {
-        text: 'Gestione Bacini',
+        text: 'Nuovo Cliente',
+        icon: <Business />,
+        path: '/clients/new',
+      },
+      {
+        text: 'Lista Bacini',
         icon: <Domain />,
         path: '/basins',
+      },
+      {
+        text: 'Nuovo Bacino',
+        icon: <Add />,
+        path: '/basins/new',
       },
     ],
   },
@@ -77,6 +100,11 @@ const menuItems: MenuItem[] = [
         text: 'Buoni di Ritiro',
         icon: <Assignment />,
         path: '/pickup-orders',
+      },
+      {
+        text: 'Nuovo Ordine',
+        icon: <Add />,
+        path: '/pickup-orders/new',
       },
       {
         text: 'Conferimenti',
@@ -115,8 +143,7 @@ const menuItems: MenuItem[] = [
 const MainLayout = ({ children }: MainLayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery('(max-width: 1199px)'); // Breakpoint più preciso
   
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>(['Clienti & Bacini', 'Ordini & Ritiri']);
@@ -135,7 +162,8 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
   const isSelected = (path?: string) => {
     if (!path) return false;
-    return location.pathname === path;
+    if (path === '/' && location.pathname === '/') return true;
+    return location.pathname.startsWith(path) && path !== '/';
   };
 
   const renderMenuItem = (item: MenuItem, depth = 0) => {
@@ -202,23 +230,9 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
         <Box sx={{ textAlign: 'center', py: 1 }}>
-          <Box
-            sx={{
-              width: 40,
-              height: 40,
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 12px',
-            }}
-          >
-            <Dashboard sx={{ color: 'black', fontSize: 24 }} />
-          </Box>
-          <Box sx={{ color: 'white', fontWeight: 600, fontSize: '1.1rem' }}>
-            SGR
-          </Box>
+          <Typography sx={{ color: 'white', fontWeight: 600, fontSize: '1.2rem' }}>
+            Sistema Gestione Rifiuti
+          </Typography>
         </Box>
       </Box>
       
@@ -229,33 +243,41 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Mobile menu button */}
-      {isMobile && (
-        <IconButton
-          color="inherit"
-          aria-label="open drawer"
-          onClick={handleDrawerToggle}
-          sx={{
-            position: 'fixed',
-            top: 16,
-            left: 16,
-            zIndex: 1300,
-            backgroundColor: 'rgba(0,0,0,0.8)',
-            color: 'white',
-            '&:hover': {
-              backgroundColor: 'rgba(0,0,0,0.9)',
-            },
-          }}
-        >
-          <Menu />
-        </IconButton>
-      )}
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      {/* Mobile menu button - SEMPRE VISIBILE */}
+      <IconButton
+        color="inherit"
+        aria-label="open drawer"
+        onClick={handleDrawerToggle}
+        sx={{
+          display: isMobile ? 'flex' : 'none',
+          position: 'fixed',
+          top: 10,
+          left: 10,
+          zIndex: 9999, // Z-index molto alto
+          backgroundColor: '#666666 !important',
+          color: 'white !important',
+          width: 50,
+          height: 50,
+          borderRadius: 2,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5) !important',
+          border: '2px solid #ffffff !important',
+          '&:hover': {
+            backgroundColor: '#555555 !important',
+          },
+          // Forza la visibilità
+          visibility: 'visible !important',
+          opacity: '1 !important',
+        }}
+      >
+        <Menu sx={{ fontSize: 24, color: 'white' }} />
+      </IconButton>
 
       {/* Desktop Drawer */}
       {!isMobile && (
         <Drawer
           variant="permanent"
+          className="desktop-drawer"
           sx={{
             width: drawerWidth,
             flexShrink: 0,
@@ -277,6 +299,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           variant="temporary"
           open={mobileOpen}
           onClose={handleDrawerToggle}
+          className="mobile-drawer"
           ModalProps={{
             keepMounted: true,
           }}
@@ -298,8 +321,8 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         sx={{
           flexGrow: 1,
           backgroundColor: '#f5f5f5',
-          minHeight: '100vh',
-          ml: isMobile ? 0 : 0, // No margin since drawer is permanent
+          width: '100%',
+          overflow: 'auto',
         }}
       >
         {children}

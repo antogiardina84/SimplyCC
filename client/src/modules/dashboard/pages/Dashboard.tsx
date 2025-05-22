@@ -88,7 +88,7 @@ const Dashboard = () => {
   ];
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Container maxWidth="xl" sx={{ py: 2, height: '100%', overflow: 'auto' }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -190,20 +190,22 @@ const Dashboard = () => {
       <Grid container spacing={3}>
         {/* Recent Activities */}
         <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3, borderRadius: 3, height: 400 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Paper sx={{ p: 3, borderRadius: 3, height: 400, display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
                 Attività Recenti
               </Typography>
               <Chip label="Oggi" size="small" variant="outlined" />
             </Box>
             
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ flexGrow: 1, overflow: 'auto', pr: 1 }}>
               {[
                 { time: '14:30', action: 'Nuovo conferimento registrato', client: 'Azienda Example Srl', type: 'conferimento' },
                 { time: '13:15', action: 'Analisi merceologica completata', client: 'Bacino 2002048', type: 'analisi' },
                 { time: '11:45', action: 'Buono di ritiro creato', client: 'Consorzio Verde SpA', type: 'ritiro' },
                 { time: '10:20', action: 'Lavorazione completata', client: 'Lotto #1245', type: 'lavorazione' },
+                { time: '09:15', action: 'Spedizione completata', client: 'Cliente ABC', type: 'spedizione' },
+                { time: '08:30', action: 'Analisi validata', client: 'Bacino 2002051', type: 'analisi' },
               ].map((activity, index) => (
                 <Box 
                   key={index}
@@ -212,9 +214,11 @@ const Dashboard = () => {
                     alignItems: 'center', 
                     gap: 2,
                     p: 2,
+                    mb: 1,
                     borderRadius: 2,
                     backgroundColor: 'grey.50',
-                    '&:hover': { backgroundColor: 'grey.100' }
+                    '&:hover': { backgroundColor: 'grey.100' },
+                    minHeight: 'auto',
                   }}
                 >
                   <Box
@@ -224,17 +228,19 @@ const Dashboard = () => {
                       borderRadius: '50%',
                       backgroundColor: activity.type === 'conferimento' ? 'success.main' :
                                      activity.type === 'analisi' ? 'info.main' :
-                                     activity.type === 'ritiro' ? 'warning.main' : 'primary.main',
+                                     activity.type === 'ritiro' ? 'warning.main' : 
+                                     activity.type === 'spedizione' ? 'secondary.main' : 'primary.main',
+                      flexShrink: 0,
                     }}
                   />
-                  <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 50 }}>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 50, flexShrink: 0 }}>
                     {activity.time}
                   </Typography>
-                  <Box>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                  <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }} noWrap>
                       {activity.action}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" noWrap>
                       {activity.client}
                     </Typography>
                   </Box>
@@ -246,9 +252,9 @@ const Dashboard = () => {
 
         {/* Quick Actions & Progress */}
         <Grid item xs={12} md={4}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: 400 }}>
             {/* Progress Card */}
-            <Paper sx={{ p: 3, borderRadius: 3 }}>
+            <Paper sx={{ p: 3, borderRadius: 3, flex: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                 Obiettivi Mensili
               </Typography>
@@ -291,7 +297,7 @@ const Dashboard = () => {
             </Paper>
 
             {/* Alerts Card */}
-            <Paper sx={{ p: 3, borderRadius: 3 }}>
+            <Paper sx={{ p: 3, borderRadius: 3, flex: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                 Avvisi
               </Typography>
