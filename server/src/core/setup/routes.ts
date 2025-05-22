@@ -6,6 +6,7 @@ import { userRoutes } from '../../modules/users/routes';
 import { clientRoutes } from '../../modules/clients/routes';
 import { basinRoutes } from '../../modules/basins/routes';
 import { pickupOrderRoutes } from '../../modules/pickupOrders/routes';
+import { dashboardRoutes } from '../../modules/dashboard/routes';
 
 export const setupRoutes = (app: Express, apiPrefix: string): void => {
   // Health check
@@ -19,6 +20,7 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
   app.use(`${apiPrefix}/clients`, clientRoutes);
   app.use(`${apiPrefix}/basins`, basinRoutes);
   app.use(`${apiPrefix}/pickup-orders`, pickupOrderRoutes);
+  app.use(`${apiPrefix}/dashboard`, dashboardRoutes);
   
   // 404 - Route not found
   app.use('*', (req, res) => {

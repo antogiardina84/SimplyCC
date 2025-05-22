@@ -1,5 +1,3 @@
-// client/src/app/layout/Navbar.tsx
-
 import { AppBar, Toolbar, Typography, Button, Box, IconButton, Avatar, Menu, MenuItem } from '@mui/material';
 import { Menu as MenuIcon, AccountCircle } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -36,21 +34,43 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
   };
   
   return (
-    <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-      <Toolbar>
+    <AppBar 
+      position="fixed" 
+      sx={{ 
+        zIndex: (theme) => theme.zIndex.drawer + 1,
+        backgroundColor: '#000000',
+        height: '64px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+      }}
+    >
+      <Toolbar sx={{ minHeight: '64px !important', px: 3 }}>
         {isAuthenticated && (
           <IconButton
             color="inherit"
             aria-label="open drawer"
             edge="start"
             onClick={onMenuClick}
-            sx={{ mr: 2 }}
+            sx={{ 
+              mr: 2,
+              '&:hover': {
+                backgroundColor: 'rgba(255,255,255,0.1)'
+              }
+            }}
           >
             <MenuIcon />
           </IconButton>
         )}
         
-        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+        <Typography 
+          variant="h6" 
+          component="div" 
+          sx={{ 
+            flexGrow: 1,
+            fontWeight: 600,
+            fontSize: '1.25rem',
+            color: '#ffffff'
+          }}
+        >
           Sistema Gestione Rifiuti
         </Typography>
         
@@ -64,9 +84,20 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
                 aria-haspopup="true"
                 onClick={handleMenu}
                 color="inherit"
+                sx={{
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.1)'
+                  }
+                }}
               >
                 {user?.firstName ? (
-                  <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                  <Avatar sx={{ 
+                    bgcolor: '#1976d2', 
+                    width: 32, 
+                    height: 32,
+                    fontSize: '0.9rem',
+                    fontWeight: 600
+                  }}>
                     {user.firstName.charAt(0)}{user.lastName?.charAt(0) || ''}
                   </Avatar>
                 ) : (
@@ -87,6 +118,12 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
                 }}
                 open={Boolean(anchorEl)}
                 onClose={handleClose}
+                PaperProps={{
+                  sx: {
+                    mt: 1,
+                    minWidth: 150,
+                  }
+                }}
               >
                 <MenuItem onClick={handleProfile}>Profilo</MenuItem>
                 <MenuItem onClick={handleLogout}>Logout</MenuItem>
@@ -94,10 +131,26 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
             </div>
           ) : (
             <>
-              <Button color="inherit" onClick={() => navigate('/login')}>
+              <Button 
+                color="inherit" 
+                onClick={() => navigate('/login')}
+                sx={{
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.1)'
+                  }
+                }}
+              >
                 Login
               </Button>
-              <Button color="inherit" onClick={() => navigate('/register')}>
+              <Button 
+                color="inherit" 
+                onClick={() => navigate('/register')}
+                sx={{
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.1)'
+                  }
+                }}
+              >
                 Registrazione
               </Button>
             </>

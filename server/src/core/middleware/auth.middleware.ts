@@ -1,19 +1,14 @@
 // server/src/core/middleware/auth.middleware.ts
 
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
 import { HttpException } from './error.middleware';
+import { verifyToken, TokenPayload } from '../../modules/auth/services/auth.service';
 
-// Estendi l'interfaccia Request per includere l'utente
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: TokenPayload;
 }
 
-// Variabili d'ambiente per JWT
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
-
-// Middleware di autenticazione
-export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
+export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
     
@@ -33,22 +28,17 @@ export const authMiddleware = (req: AuthRequest, res: Response, next: NextFuncti
       throw new HttpException(401, 'Formato del token non valido');
     }
     
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-      if (err) {
-        throw new HttpException(401, 'Token non valido o scaduto');
-      }
-      
-      req.user = decoded;
-      next();
-    });
+    const decoded = verifyToken(token);
+    req.user = decoded;
+    
+    next();
   } catch (error) {
     next(error);
   }
 };
 
-// Middleware di controllo ruoli
 export const checkRole = (roles: string[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       if (!req.user) {
         throw new HttpException(401, 'Autenticazione richiesta');

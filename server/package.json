@@ -9,6 +9,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
+    "init-admin": "ts-node src/scripts/init-admin.ts",
     "test": "jest"
   },
   "keywords": [

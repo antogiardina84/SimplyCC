@@ -2,7 +2,7 @@
 
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, User } from '@prisma/client';
 import { HttpException } from '../../../core/middleware/error.middleware';
 
 const prisma = new PrismaClient();
@@ -15,7 +15,25 @@ export interface TokenPayload {
   role: string;
 }
 
-export const register = async (email: string, password: string, firstName?: string, lastName?: string) => {
+interface UserResponse {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  role: string;
+}
+
+interface AuthResponse {
+  user: UserResponse;
+  token: string;
+}
+
+export const register = async (
+  email: string, 
+  password: string, 
+  firstName?: string, 
+  lastName?: string
+): Promise<AuthResponse> => {
   // Verifica se l'utente esiste già
   const existingUser = await prisma.user.findUnique({
     where: { email },
@@ -54,7 +72,7 @@ export const register = async (email: string, password: string, firstName?: stri
   };
 };
 
-export const login = async (email: string, password: string) => {
+export const login = async (email: string, password: string): Promise<AuthResponse> => {
   // Trova l'utente
   const user = await prisma.user.findUnique({
     where: { email },
@@ -85,7 +103,7 @@ export const login = async (email: string, password: string) => {
   };
 };
 
-export const generateToken = (user: any): string => {
+export const generateToken = (user: User): string => {
   const payload: TokenPayload = {
     userId: user.id,
     email: user.email,

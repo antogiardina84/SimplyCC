@@ -1,5 +1,3 @@
-// client/src/modules/auth/pages/Login.tsx
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Box, Typography, TextField, Button, Paper, Alert } from '@mui/material';
@@ -33,11 +31,16 @@ const Login = () => {
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Paper sx={{ p: 4, width: '100%' }}>
-          <Typography component="h1" variant="h5" sx={{ mb: 3, textAlign: 'center' }}>
-            Accedi
+    <Box sx={{ 
+      minHeight: '100vh',
+      backgroundColor: '#f8f9fa',
+      display: 'flex',
+      alignItems: 'center'
+    }}>
+      <Container maxWidth="sm">
+        <Paper sx={{ p: 4 }}>
+          <Typography component="h1" variant="h4" sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}>
+            Accedi al Sistema
           </Typography>
           
           {error && (
@@ -87,15 +90,25 @@ const Login = () => {
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              sx={{ mt: 3, mb: 2, height: '48px' }}
               disabled={loading}
             >
               {loading ? 'Accesso in corso...' : 'Accedi'}
             </Button>
+            
+            <Box sx={{ textAlign: 'center', mt: 2 }}>
+              <Button
+                variant="text"
+                onClick={() => navigate('/register')}
+                disabled={loading}
+              >
+                Non hai un account? Registrati
+              </Button>
+            </Box>
           </Box>
         </Paper>
-      </Box>
-    </Container>
+      </Container>
+    </Box>
   );
 };
 

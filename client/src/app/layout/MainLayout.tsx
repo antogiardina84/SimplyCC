@@ -1,7 +1,7 @@
 // client/src/app/layout/MainLayout.tsx
 
 import { useState } from 'react';
-import { Box, CssBaseline, Toolbar } from '@mui/material';
+import { Box, CssBaseline, useTheme, useMediaQuery } from '@mui/material';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 
@@ -10,14 +10,16 @@ interface MainLayoutProps {
 }
 
 const MainLayout = ({ children }: MainLayoutProps) => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
       <CssBaseline />
       <Navbar onMenuClick={toggleSidebar} />
       <Sidebar open={sidebarOpen} onToggle={toggleSidebar} />
@@ -25,17 +27,27 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
-          width: { sm: `calc(100% - ${sidebarOpen ? 240 : 0}px)` },
-          ml: { sm: sidebarOpen ? '240px' : 0 },
-          transition: (theme) => theme.transitions.create(['margin', 'width'], {
+          display: 'flex',
+          flexDirection: 'column',
+          transition: theme.transitions.create(['margin'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
           }),
+          marginLeft: { 
+            xs: 0,
+            md: sidebarOpen ? '240px' : 0 
+          },
+          width: { 
+            xs: '100%',
+            md: sidebarOpen ? 'calc(100% - 240px)' : '100%' 
+          },
+          paddingTop: '64px', // Spazio per la navbar
+          backgroundColor: theme.palette.background.default,
         }}
       >
-        <Toolbar /> {/* Questo spazio tiene conto dell'altezza dell'appbar */}
-        {children}
+        <Box sx={{ flexGrow: 1, p: { xs: 1, sm: 2, md: 3 } }}>
+          {children}
+        </Box>
       </Box>
     </Box>
   );
