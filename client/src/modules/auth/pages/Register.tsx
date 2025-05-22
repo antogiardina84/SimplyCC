@@ -1,5 +1,3 @@
-// client/src/modules/auth/pages/Register.tsx
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Box, Typography, TextField, Button, Paper, Alert } from '@mui/material';
@@ -10,14 +8,15 @@ interface RegisterForm {
   email: string;
   password: string;
   confirmPassword: string;
-  firstName?: string;
-  lastName?: string;
+  firstName: string;
+  lastName: string;
 }
 
 const Register = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const { register, handleSubmit, formState: { errors }, watch } = useForm<RegisterForm>();
   
   const password = watch('password');
@@ -25,50 +24,73 @@ const Register = () => {
   const onSubmit = async (data: RegisterForm) => {
     try {
       setLoading(true);
-      setError(null);
+      setError('');
+      setSuccess('');
       
-      const { email, password, firstName, lastName } = data;
-      await authService.register({ email, password, firstName, lastName });
+      await authService.register({
+        email: data.email,
+        password: data.password,
+        firstName: data.firstName,
+        lastName: data.lastName
+      });
       
-      navigate('/login');
+      setSuccess('Registrazione completata con successo! Ora puoi effettuare il login.');
+      
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+      
     } catch (error: any) {
       console.error('Registration failed:', error);
-      setError(error.response?.data?.message || 'Si è verificato un errore durante la registrazione');
+      setError(error.response?.data?.message || 'Errore durante la registrazione');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Paper sx={{ p: 4, width: '100%' }}>
-          <Typography component="h1" variant="h5" sx={{ mb: 3, textAlign: 'center' }}>
+    <Box sx={{ 
+      minHeight: '100vh',
+      backgroundColor: '#f8f9fa',
+      display: 'flex',
+      alignItems: 'center'
+    }}>
+      <Container maxWidth="sm">
+        <Paper sx={{ p: 4 }}>
+          <Typography component="h1" variant="h4" sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}>
             Registrazione
           </Typography>
           
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
           
           <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ mt: 1 }}>
             <TextField
               margin="normal"
+              required
               fullWidth
               id="firstName"
               label="Nome"
               autoComplete="given-name"
-              {...register('firstName')}
+              autoFocus
+              {...register('firstName', { 
+                required: 'Nome è obbligatorio'
+              })}
+              error={!!errors.firstName}
+              helperText={errors.firstName?.message}
             />
             <TextField
               margin="normal"
+              required
               fullWidth
               id="lastName"
               label="Cognome"
               autoComplete="family-name"
-              {...register('lastName')}
+              {...register('lastName', { 
+                required: 'Cognome è obbligatorio'
+              })}
+              error={!!errors.lastName}
+              helperText={errors.lastName?.message}
             />
             <TextField
               margin="normal"
@@ -124,15 +146,25 @@ const Register = () => {
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              sx={{ mt: 3, mb: 2, height: '48px' }}
               disabled={loading}
             >
               {loading ? 'Registrazione in corso...' : 'Registrati'}
             </Button>
+            
+            <Box sx={{ textAlign: 'center', mt: 2 }}>
+              <Button
+                variant="text"
+                onClick={() => navigate('/login')}
+                disabled={loading}
+              >
+                Hai già un account? Accedi
+              </Button>
+            </Box>
           </Box>
         </Paper>
-      </Box>
-    </Container>
+      </Container>
+    </Box>
   );
 };
 

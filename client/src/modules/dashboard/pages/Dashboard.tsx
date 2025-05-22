@@ -1,237 +1,336 @@
-// client/src/modules/dashboard/pages/Dashboard.tsx
-
 import { useState, useEffect } from 'react';
-import { Container, Typography, Paper, Grid, CircularProgress, Card, CardContent, Box } from '@mui/material';
-import { People, Business, Assignment, ViewList } from '@mui/icons-material';
+import {
+  Container,
+  Typography,
+  Paper,
+  Grid,
+  CircularProgress,
+  Box,
+  Card,
+  CardContent,
+  LinearProgress,
+  Chip,
+  IconButton,
+} from '@mui/material';
+import {
+  TrendingUp,
+  LocalShipping,
+  Assignment,
+  Science,
+  Refresh,
+  ArrowUpward,
+  ArrowDownward,
+} from '@mui/icons-material';
 import api from '../../../core/services/api';
-import * as authService from '../../auth/services/authService';
 
-interface DashboardStats {
-  totalUsers: number;
-  totalClients: number;
-  totalBasins: number;
-  totalPickupOrders: number;
-  pendingOrders: number;
+interface StatCard {
+  title: string;
+  value: string;
+  change: string;
+  trend: 'up' | 'down';
+  icon: React.ReactNode;
+  color: string;
 }
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [apiStatus, setApiStatus] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const user = authService.getCurrentUser();
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const checkHealth = async () => {
       try {
-        setLoading(true);
-        setError(null);
-        
-        // Controlla prima lo stato dell'API
-        const healthResponse = await api.get('/health');
-        setApiStatus(healthResponse.data.status);
-        
-        // Prova a ottenere le statistiche
-        try {
-          const statsResponse = await api.get('/dashboard/stats');
-          setStats(statsResponse.data);
-        } catch (statsError: any) {
-          console.warn('Stats endpoint not available:', statsError);
-          // Usa dati mock se l'endpoint non è disponibile
-          setStats({
-            totalUsers: 0,
-            totalClients: 0,
-            totalBasins: 0,
-            totalPickupOrders: 0,
-            pendingOrders: 0,
-          });
-        }
-        
-      } catch (error: any) {
-        console.error('Error fetching dashboard data:', error);
-        setApiStatus('DOWN');
-        setError('Impossibile connettersi al server');
-        
-        // Dati di fallback
-        setStats({
-          totalUsers: 0,
-          totalClients: 0,
-          totalBasins: 0,
-          totalPickupOrders: 0,
-          pendingOrders: 0,
-        });
+        const response = await api.get('/health');
+        setStatus(response.data.status);
+      } catch (error) {
+        console.error('Error checking health:', error);
+        setStatus('DOWN');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchDashboardData();
+    checkHealth();
   }, []);
 
-  const StatCard = ({ 
-    title, 
-    value, 
-    icon, 
-    color 
-  }: { 
-    title: string; 
-    value: number; 
-    icon: React.ReactNode; 
-    color: string 
-  }) => (
-    <Card>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography color="textSecondary" gutterBottom variant="body2">
-              {title}
-            </Typography>
-            <Typography variant="h4" component="h2">
-              {value}
-            </Typography>
-          </Box>
-          <Box sx={{ color: color, fontSize: 40 }}>
-            {icon}
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
-  );
+  const statCards: StatCard[] = [
+    {
+      title: 'Conferimenti Oggi',
+      value: '24',
+      change: '+12%',
+      trend: 'up',
+      icon: <LocalShipping />,
+      color: '#4caf50',
+    },
+    {
+      title: 'Buoni di Ritiro',
+      value: '8',
+      change: '+5%',
+      trend: 'up',
+      icon: <Assignment />,
+      color: '#2196f3',
+    },
+    {
+      title: 'Analisi Pendenti',
+      value: '3',
+      change: '-2%',
+      trend: 'down',
+      icon: <Science />,
+      color: '#ff9800',
+    },
+    {
+      title: 'Giacenze Totali',
+      value: '1,245 t',
+      change: '+8%',
+      trend: 'up',
+      icon: <TrendingUp />,
+      color: '#9c27b0',
+    },
+  ];
 
   return (
-    <Container maxWidth="xl">
+    <Container maxWidth="xl" sx={{ py: 4 }}>
+      {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Dashboard
-        </Typography>
-        <Typography variant="body1" color="textSecondary">
-          Benvenuto, {user?.firstName ? `${user.firstName} ${user.lastName || ''}` : user?.email}
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box>
+            <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 600 }}>
+              Dashboard
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Panoramica generale del sistema di gestione rifiuti
+            </Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Chip
+              label={`API: ${loading ? 'Checking...' : status}`}
+              color={status === 'UP' ? 'success' : 'error'}
+              variant="outlined"
+              icon={loading ? <CircularProgress size={16} /> : undefined}
+              sx={{ fontWeight: 500 }}
+            />
+            <IconButton 
+              onClick={() => window.location.reload()}
+              sx={{ 
+                backgroundColor: 'primary.main',
+                color: 'white',
+                '&:hover': { backgroundColor: 'primary.dark' }
+              }}
+            >
+              <Refresh />
+            </IconButton>
+          </Box>
+        </Box>
       </Box>
 
-      {error && (
-        <Paper sx={{ p: 2, mb: 3, backgroundColor: '#ffebee' }}>
-          <Typography color="error">
-            {error}
-          </Typography>
-        </Paper>
-      )}
-
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <Grid container spacing={3}>
-          {/* Statistiche Principali */}
-          <Grid item xs={12}>
-            <Typography variant="h6" gutterBottom>
-              Statistiche Generali
-            </Typography>
-          </Grid>
-
-          {user?.role === 'ADMIN' && (
-            <Grid item xs={12} sm={6} md={3}>
-              <StatCard
-                title="Utenti Totali"
-                value={stats?.totalUsers || 0}
-                icon={<People />}
-                color="#1976d2"
-              />
-            </Grid>
-          )}
-
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard
-              title="Clienti Totali"
-              value={stats?.totalClients || 0}
-              icon={<Business />}
-              color="#388e3c"
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard
-              title="Bacini Totali"
-              value={stats?.totalBasins || 0}
-              icon={<ViewList />}
-              color="#f57c00"
-            />
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <StatCard
-              title="Buoni di Ritiro"
-              value={stats?.totalPickupOrders || 0}
-              icon={<Assignment />}
-              color="#7b1fa2"
-            />
-          </Grid>
-
-          {/* Stato Sistema */}
-          <Grid item xs={12}>
-            <Paper sx={{ p: 3, mt: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Stato Sistema
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="body1">
-                  Stato API:
+      {/* Statistics Cards */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {statCards.map((card, index) => (
+          <Grid item xs={12} sm={6} lg={3} key={index}>
+            <Card 
+              sx={{ 
+                height: '100%',
+                borderRadius: 3,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: 'translateY(-4px)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                },
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                  <Box
+                    sx={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 2,
+                      backgroundColor: `${card.color}20`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: card.color,
+                    }}
+                  >
+                    {card.icon}
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    {card.trend === 'up' ? (
+                      <ArrowUpward sx={{ fontSize: 16, color: 'success.main' }} />
+                    ) : (
+                      <ArrowDownward sx={{ fontSize: 16, color: 'error.main' }} />
+                    )}
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        color: card.trend === 'up' ? 'success.main' : 'error.main',
+                        fontWeight: 600 
+                      }}
+                    >
+                      {card.change}
+                    </Typography>
+                  </Box>
+                </Box>
+                
+                <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                  {card.value}
                 </Typography>
+                
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                  {card.title}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* Main Content Grid */}
+      <Grid container spacing={3}>
+        {/* Recent Activities */}
+        <Grid item xs={12} md={8}>
+          <Paper sx={{ p: 3, borderRadius: 3, height: 400 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                Attività Recenti
+              </Typography>
+              <Chip label="Oggi" size="small" variant="outlined" />
+            </Box>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {[
+                { time: '14:30', action: 'Nuovo conferimento registrato', client: 'Azienda Example Srl', type: 'conferimento' },
+                { time: '13:15', action: 'Analisi merceologica completata', client: 'Bacino 2002048', type: 'analisi' },
+                { time: '11:45', action: 'Buono di ritiro creato', client: 'Consorzio Verde SpA', type: 'ritiro' },
+                { time: '10:20', action: 'Lavorazione completata', client: 'Lotto #1245', type: 'lavorazione' },
+              ].map((activity, index) => (
                 <Box 
+                  key={index}
                   sx={{ 
-                    px: 2, 
-                    py: 0.5, 
-                    borderRadius: 1, 
-                    backgroundColor: apiStatus === 'UP' ? '#4caf50' : '#f44336',
-                    color: 'white',
-                    fontWeight: 'bold'
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 2,
+                    p: 2,
+                    borderRadius: 2,
+                    backgroundColor: 'grey.50',
+                    '&:hover': { backgroundColor: 'grey.100' }
                   }}
                 >
-                  {apiStatus || 'UNKNOWN'}
+                  <Box
+                    sx={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      backgroundColor: activity.type === 'conferimento' ? 'success.main' :
+                                     activity.type === 'analisi' ? 'info.main' :
+                                     activity.type === 'ritiro' ? 'warning.main' : 'primary.main',
+                    }}
+                  />
+                  <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 50 }}>
+                    {activity.time}
+                  </Typography>
+                  <Box>
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      {activity.action}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {activity.client}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          </Paper>
+        </Grid>
+
+        {/* Quick Actions & Progress */}
+        <Grid item xs={12} md={4}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Progress Card */}
+            <Paper sx={{ p: 3, borderRadius: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                Obiettivi Mensili
+              </Typography>
+              
+              <Box sx={{ mb: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Conferimenti</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>78%</Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={78} 
+                  sx={{ height: 8, borderRadius: 4 }}
+                />
+              </Box>
+              
+              <Box sx={{ mb: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Analisi</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>92%</Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={92} 
+                  sx={{ height: 8, borderRadius: 4 }}
+                />
+              </Box>
+              
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Spedizioni</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>65%</Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={65} 
+                  sx={{ height: 8, borderRadius: 4 }}
+                />
+              </Box>
+            </Paper>
+
+            {/* Alerts Card */}
+            <Paper sx={{ p: 3, borderRadius: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                Avvisi
+              </Typography>
+              
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                <Box sx={{ 
+                  p: 2, 
+                  borderRadius: 2, 
+                  backgroundColor: 'warning.lighter',
+                  border: '1px solid',
+                  borderColor: 'warning.light'
+                }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.dark' }}>
+                    Giacenza critica
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Materiale tipo A sotto soglia minima
+                  </Typography>
+                </Box>
+                
+                <Box sx={{ 
+                  p: 2, 
+                  borderRadius: 2, 
+                  backgroundColor: 'info.lighter',
+                  border: '1px solid',
+                  borderColor: 'info.light'
+                }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'info.dark' }}>
+                    Analisi in scadenza
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    3 analisi da completare entro domani
+                  </Typography>
                 </Box>
               </Box>
             </Paper>
-          </Grid>
-
-          {/* Sezioni Informative */}
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Typography variant="h6" gutterBottom>
-                Azioni Rapide
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Usa il menu laterale per navigare tra le diverse sezioni del sistema:
-              </Typography>
-              <Box component="ul" sx={{ mt: 2, pl: 2 }}>
-                <li>Gestione Clienti e Bacini</li>
-                <li>Buoni di Ritiro</li>
-                {user?.role === 'ADMIN' && <li>Amministrazione Utenti</li>}
-                <li>Profilo Utente</li>
-              </Box>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Typography variant="h6" gutterBottom>
-                Informazioni Sistema
-              </Typography>
-              <Typography variant="body2" color="textSecondary">
-                Sistema di Gestione Rifiuti conforme all'allegato tecnico ANCI-COREPLA.
-              </Typography>
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  <strong>Versione:</strong> 0.1.0
-                </Typography>
-                <Typography variant="body2">
-                  <strong>Ambiente:</strong> {import.meta.env.MODE || 'development'}
-                </Typography>
-              </Box>
-            </Paper>
-          </Grid>
+          </Box>
         </Grid>
-      )}
+      </Grid>
     </Container>
   );
 };

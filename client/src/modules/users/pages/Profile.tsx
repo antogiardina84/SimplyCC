@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Container, Typography, Paper, Box, Grid, TextField, Button, Alert, Divider } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
 import * as authService from '../../auth/services/authService';
-import * as profileService from '../../users/services/profileService';
+import * as profileService from '../../profile/services/profileService';
 
 const Profile = () => {
   const [loading, setLoading] = useState(false);

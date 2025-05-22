@@ -1,42 +1,39 @@
-import { useState } from 'react';
-import { Box } from '@mui/material';
+import { useLocation } from 'react-router-dom';
 import AppProviders from './app/providers/AppProviders';
 import Navbar from './app/layout/Navbar';
-import Sidebar from './app/layout/Sidebar';
+import MainLayout from './app/layout/MainLayout';
 import AppRoutes from './app/routes';
-import * as authService from './modules/auth/services/authService';
 
-const App = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const isAuthenticated = authService.isAuthenticated();
-
-  const handleSidebarToggle = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+const AppContent = () => {
+  const location = useLocation();
+  const isAuthPage = ['/login', '/register'].includes(location.pathname);
 
   return (
-    <AppProviders>
-      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <Navbar onMenuClick={handleSidebarToggle} />
-        
-        <Box sx={{ display: 'flex', flex: 1, pt: '64px' }}>
-          {isAuthenticated && (
-            <Sidebar open={sidebarOpen} onToggle={handleSidebarToggle} />
-          )}
-          
-          <Box 
-            component="main" 
-            sx={{ 
-              flex: 1,
-              backgroundColor: '#f8f9fa',
-              minHeight: 'calc(100vh - 64px)',
-              transition: 'margin-left 0.3s ease',
-            }}
-          >
+    <>
+      {isAuthPage ? (
+        // Pagine di autenticazione senza layout
+        <>
+          <Navbar />
+          <AppRoutes />
+        </>
+      ) : (
+        // Pagine principali con layout completo
+        <>
+          <Navbar />
+          <MainLayout>
             <AppRoutes />
-          </Box>
-        </Box>
-      </Box>
+          </MainLayout>
+        </>
+      )}
+    </>
+  );
+};
+
+// App principale con providers
+const App = () => {
+  return (
+    <AppProviders>
+      <AppContent />
     </AppProviders>
   );
 };

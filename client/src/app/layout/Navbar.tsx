@@ -1,142 +1,72 @@
-import { AppBar, Toolbar, Typography, Button, Box, IconButton, Avatar, Menu, MenuItem } from '@mui/material';
-import { Menu as MenuIcon, AccountCircle } from '@mui/icons-material';
+import { AppBar, Toolbar, Typography, Button, Box, IconButton, Avatar } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
-import * as authService from '../../modules/auth/services/authService';
+import { AccountCircle, Logout } from '@mui/icons-material';
 
-interface NavbarProps {
-  onMenuClick: () => void;
-}
-
-const Navbar = ({ onMenuClick }: NavbarProps) => {
+const Navbar = () => {
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const isAuthenticated = authService.isAuthenticated();
-  const user = authService.getCurrentUser();
-  
-  const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
+  const token = localStorage.getItem('token');
   
   const handleLogout = () => {
-    authService.logout();
-    handleClose();
+    localStorage.removeItem('token');
     navigate('/login');
   };
   
-  const handleProfile = () => {
-    handleClose();
-    navigate('/profile');
-  };
-  
   return (
-    <AppBar 
-      position="fixed" 
-      sx={{ 
-        zIndex: (theme) => theme.zIndex.drawer + 1,
-        backgroundColor: '#000000',
-        height: '64px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-      }}
-    >
-      <Toolbar sx={{ minHeight: '64px !important', px: 3 }}>
-        {isAuthenticated && (
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={onMenuClick}
+    <AppBar position="static" sx={{ zIndex: 1201 }}>
+      <Toolbar sx={{ justifyContent: 'space-between', minHeight: '70px !important' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Typography 
+            variant="h5" 
+            component="div" 
             sx={{ 
-              mr: 2,
-              '&:hover': {
-                backgroundColor: 'rgba(255,255,255,0.1)'
-              }
+              fontWeight: 600,
+              letterSpacing: '0.5px',
+              cursor: 'pointer'
             }}
+            onClick={() => navigate('/')}
           >
-            <MenuIcon />
-          </IconButton>
-        )}
+            Sistema Gestione Rifiuti
+          </Typography>
+        </Box>
         
-        <Typography 
-          variant="h6" 
-          component="div" 
-          sx={{ 
-            flexGrow: 1,
-            fontWeight: 600,
-            fontSize: '1.25rem',
-            color: '#ffffff'
-          }}
-        >
-          Sistema Gestione Rifiuti
-        </Typography>
-        
-        <Box>
-          {isAuthenticated ? (
-            <div>
-              <IconButton
-                size="large"
-                aria-label="account of current user"
-                aria-controls="menu-appbar"
-                aria-haspopup="true"
-                onClick={handleMenu}
-                color="inherit"
-                sx={{
-                  '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)'
-                  }
-                }}
-              >
-                {user?.firstName ? (
-                  <Avatar sx={{ 
-                    bgcolor: '#1976d2', 
-                    width: 32, 
-                    height: 32,
-                    fontSize: '0.9rem',
-                    fontWeight: 600
-                  }}>
-                    {user.firstName.charAt(0)}{user.lastName?.charAt(0) || ''}
-                  </Avatar>
-                ) : (
-                  <AccountCircle />
-                )}
-              </IconButton>
-              <Menu
-                id="menu-appbar"
-                anchorEl={anchorEl}
-                anchorOrigin={{
-                  vertical: 'bottom',
-                  horizontal: 'right',
-                }}
-                keepMounted
-                transformOrigin={{
-                  vertical: 'top',
-                  horizontal: 'right',
-                }}
-                open={Boolean(anchorEl)}
-                onClose={handleClose}
-                PaperProps={{
-                  sx: {
-                    mt: 1,
-                    minWidth: 150,
-                  }
-                }}
-              >
-                <MenuItem onClick={handleProfile}>Profilo</MenuItem>
-                <MenuItem onClick={handleLogout}>Logout</MenuItem>
-              </Menu>
-            </div>
-          ) : (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {token ? (
             <>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Avatar sx={{ width: 32, height: 32, bgcolor: 'rgba(255,255,255,0.2)' }}>
+                  <AccountCircle />
+                </Avatar>
+                <Typography variant="body2" sx={{ color: 'white', fontWeight: 500 }}>
+                  Utente
+                </Typography>
+              </Box>
+              <IconButton 
+                color="inherit" 
+                onClick={handleLogout}
+                sx={{ 
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                  }
+                }}
+              >
+                <Logout sx={{ mr: 1 }} />
+                <Typography variant="body2">Logout</Typography>
+              </IconButton>
+            </>
+          ) : (
+            <Box sx={{ display: 'flex', gap: 1 }}>
               <Button 
                 color="inherit" 
                 onClick={() => navigate('/login')}
-                sx={{
+                sx={{ 
+                  borderRadius: '6px',
+                  padding: '8px 16px',
+                  border: '1px solid rgba(255,255,255,0.3)',
                   '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)'
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.5)',
                   }
                 }}
               >
@@ -145,15 +75,18 @@ const Navbar = ({ onMenuClick }: NavbarProps) => {
               <Button 
                 color="inherit" 
                 onClick={() => navigate('/register')}
-                sx={{
+                sx={{ 
+                  borderRadius: '6px',
+                  padding: '8px 16px',
+                  backgroundColor: 'rgba(255,255,255,0.1)',
                   '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.1)'
+                    backgroundColor: 'rgba(255,255,255,0.2)',
                   }
                 }}
               >
-                Registrazione
+                Register
               </Button>
-            </>
+            </Box>
           )}
         </Box>
       </Toolbar>

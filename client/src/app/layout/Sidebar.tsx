@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Box, 
+  Drawer, 
+  Toolbar,
   List, 
   ListItemButton, 
   ListItemIcon, 
   ListItemText, 
-  Drawer, 
-  Divider, 
-  Collapse, 
-  useTheme, 
-  useMediaQuery,
-  Typography
+  Collapse,
+  Typography,
+  Divider,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import { 
   Dashboard as DashboardIcon, 
@@ -32,9 +33,10 @@ import * as authService from '../../modules/auth/services/authService';
 interface SidebarProps {
   open: boolean;
   onToggle: () => void;
+  drawerWidth: number;
 }
 
-const Sidebar = ({ open, onToggle }: SidebarProps) => {
+const Sidebar = ({ open, onToggle, drawerWidth }: SidebarProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -45,14 +47,6 @@ const Sidebar = ({ open, onToggle }: SidebarProps) => {
   const user = authService.getCurrentUser();
   const isAdmin = user?.role === 'ADMIN';
 
-  const handleClientsToggle = () => {
-    setClientsOpen(!clientsOpen);
-  };
-
-  const handleOrdersToggle = () => {
-    setOrdersOpen(!ordersOpen);
-  };
-
   const handleNavigation = (path: string) => {
     navigate(path);
     if (isMobile) {
@@ -60,257 +54,200 @@ const Sidebar = ({ open, onToggle }: SidebarProps) => {
     }
   };
 
-  const isActive = (path: string | string[], exact = false) => {
-    if (Array.isArray(path)) {
-      return path.some(p => location.pathname.startsWith(p));
+  const isActive = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/';
     }
-    if (exact) {
-      return location.pathname === path;
-    }
-    return location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
+    return location.pathname.startsWith(path);
   };
 
-  const drawerWidth = 280;
+  const drawer = (
+    <div>
+      <Toolbar />
+      <Box sx={{ p: 2 }}>
+        <Typography variant="h6" sx={{ fontWeight: 600, color: '#333' }}>
+          Menu Principale
+        </Typography>
+      </Box>
+      <Divider />
+      
+      <List sx={{ px: 1 }}>
+        <ListItemButton
+          onClick={() => handleNavigation('/')}
+          selected={isActive('/')}
+          sx={{ mb: 0.5, borderRadius: 1 }}
+        >
+          <ListItemIcon>
+            <DashboardIcon />
+          </ListItemIcon>
+          <ListItemText primary="Dashboard" />
+        </ListItemButton>
 
-  const menuItems = [
-    {
-      text: 'Dashboard',
-      icon: <DashboardIcon />,
-      path: '/',
-      action: () => handleNavigation('/'),
-      exact: true
-    },
-    ...(isAdmin ? [{
-      text: 'Gestione Utenti',
-      icon: <PeopleIcon />,
-      path: '/users',
-      action: () => handleNavigation('/users')
-    }] : []),
-    {
-      text: 'Clienti & Bacini',
-      icon: <BusinessIcon />,
-      isExpandable: true,
-      expanded: clientsOpen,
-      onToggle: handleClientsToggle,
-      subItems: [
-        {
-          text: 'Gestione Clienti',
-          icon: <BusinessIcon />,
-          path: '/clients',
-          action: () => handleNavigation('/clients')
-        },
-        {
-          text: 'Gestione Bacini',
-          icon: <ViewListIcon />,
-          path: '/basins',
-          action: () => handleNavigation('/basins')
-        }
-      ]
-    },
-    {
-      text: 'Ordini & Ritiri',
-      icon: <AssignmentIcon />,
-      isExpandable: true,
-      expanded: ordersOpen,
-      onToggle: handleOrdersToggle,
-      subItems: [
-        {
-          text: 'Buoni di Ritiro',
-          icon: <DescriptionIcon />,
-          path: '/pickup-orders',
-          action: () => handleNavigation('/pickup-orders')
-        },
-        {
-          text: 'Conferimenti',
-          icon: <AssignmentIcon />,
-          path: '/deliveries',
-          action: () => handleNavigation('/deliveries')
-        },
-        {
-          text: 'Lavorazioni',
-          icon: <ScienceIcon />,
-          path: '/processing',
-          action: () => handleNavigation('/processing')
-        },
-        {
-          text: 'Uscite',
-          icon: <ShippingIcon />,
-          path: '/shipments',
-          action: () => handleNavigation('/shipments')
-        }
-      ]
-    },
-    {
-      text: 'Analisi Merceologiche',
-      icon: <ScienceIcon />,
-      path: '/analysis',
-      action: () => handleNavigation('/analysis')
-    },
-    {
-      text: 'Gestione Giacenze',
-      icon: <InventoryIcon />,
-      path: '/inventory',
-      action: () => handleNavigation('/inventory')
-    },
-    {
-      text: 'Report & Attestazioni',
-      icon: <ReportIcon />,
-      path: '/reports',
-      action: () => handleNavigation('/reports')
-    }
-  ];
+        {isAdmin && (
+          <ListItemButton
+            onClick={() => handleNavigation('/users')}
+            selected={isActive('/users')}
+            sx={{ mb: 0.5, borderRadius: 1 }}
+          >
+            <ListItemIcon>
+              <PeopleIcon />
+            </ListItemIcon>
+            <ListItemText primary="Gestione Utenti" />
+          </ListItemButton>
+        )}
+
+        <ListItemButton
+          onClick={() => setClientsOpen(!clientsOpen)}
+          sx={{ mb: 0.5, borderRadius: 1 }}
+        >
+          <ListItemIcon>
+            <BusinessIcon />
+          </ListItemIcon>
+          <ListItemText primary="Clienti & Bacini" />
+          {clientsOpen ? <ExpandLess /> : <ExpandMore />}
+        </ListItemButton>
+        
+        <Collapse in={clientsOpen} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            <ListItemButton
+              sx={{ pl: 4, mb: 0.5, borderRadius: 1 }}
+              onClick={() => handleNavigation('/clients')}
+              selected={isActive('/clients')}
+            >
+              <ListItemIcon>
+                <BusinessIcon />
+              </ListItemIcon>
+              <ListItemText primary="Gestione Clienti" />
+            </ListItemButton>
+            
+            <ListItemButton
+              sx={{ pl: 4, mb: 0.5, borderRadius: 1 }}
+              onClick={() => handleNavigation('/basins')}
+              selected={isActive('/basins')}
+            >
+              <ListItemIcon>
+                <ViewListIcon />
+              </ListItemIcon>
+              <ListItemText primary="Gestione Bacini" />
+            </ListItemButton>
+          </List>
+        </Collapse>
+
+        <ListItemButton
+          onClick={() => setOrdersOpen(!ordersOpen)}
+          sx={{ mb: 0.5, borderRadius: 1 }}
+        >
+          <ListItemIcon>
+            <AssignmentIcon />
+          </ListItemIcon>
+          <ListItemText primary="Ordini & Ritiri" />
+          {ordersOpen ? <ExpandLess /> : <ExpandMore />}
+        </ListItemButton>
+        
+        <Collapse in={ordersOpen} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding>
+            <ListItemButton
+              sx={{ pl: 4, mb: 0.5, borderRadius: 1 }}
+              onClick={() => handleNavigation('/pickup-orders')}
+              selected={isActive('/pickup-orders')}
+            >
+              <ListItemIcon>
+                <DescriptionIcon />
+              </ListItemIcon>
+              <ListItemText primary="Buoni di Ritiro" />
+            </ListItemButton>
+            
+            <ListItemButton
+              sx={{ pl: 4, mb: 0.5, borderRadius: 1 }}
+              onClick={() => handleNavigation('/deliveries')}
+              selected={isActive('/deliveries')}
+            >
+              <ListItemIcon>
+                <AssignmentIcon />
+              </ListItemIcon>
+              <ListItemText primary="Conferimenti" />
+            </ListItemButton>
+            
+            <ListItemButton
+              sx={{ pl: 4, mb: 0.5, borderRadius: 1 }}
+              onClick={() => handleNavigation('/processing')}
+              selected={isActive('/processing')}
+            >
+              <ListItemIcon>
+                <ScienceIcon />
+              </ListItemIcon>
+              <ListItemText primary="Lavorazioni" />
+            </ListItemButton>
+            
+            <ListItemButton
+              sx={{ pl: 4, mb: 0.5, borderRadius: 1 }}
+              onClick={() => handleNavigation('/shipments')}
+              selected={isActive('/shipments')}
+            >
+              <ListItemIcon>
+                <ShippingIcon />
+              </ListItemIcon>
+              <ListItemText primary="Uscite" />
+            </ListItemButton>
+          </List>
+        </Collapse>
+
+        <ListItemButton
+          onClick={() => handleNavigation('/analysis')}
+          selected={isActive('/analysis')}
+          sx={{ mb: 0.5, borderRadius: 1 }}
+        >
+          <ListItemIcon>
+            <ScienceIcon />
+          </ListItemIcon>
+          <ListItemText primary="Analisi Merceologiche" />
+        </ListItemButton>
+        
+        <ListItemButton
+          onClick={() => handleNavigation('/inventory')}
+          selected={isActive('/inventory')}
+          sx={{ mb: 0.5, borderRadius: 1 }}
+        >
+          <ListItemIcon>
+            <InventoryIcon />
+          </ListItemIcon>
+          <ListItemText primary="Gestione Giacenze" />
+        </ListItemButton>
+        
+        <ListItemButton
+          onClick={() => handleNavigation('/reports')}
+          selected={isActive('/reports')}
+          sx={{ mb: 0.5, borderRadius: 1 }}
+        >
+          <ListItemIcon>
+            <ReportIcon />
+          </ListItemIcon>
+          <ListItemText primary="Report & Attestazioni" />
+        </ListItemButton>
+      </List>
+    </div>
+  );
 
   return (
     <Drawer
       variant={isMobile ? 'temporary' : 'persistent'}
-      anchor="left"
       open={open}
       onClose={onToggle}
+      ModalProps={{
+        keepMounted: true, // Better open performance on mobile
+      }}
       sx={{
         width: drawerWidth,
         flexShrink: 0,
         '& .MuiDrawer-paper': {
           width: drawerWidth,
           boxSizing: 'border-box',
-          top: '64px',
-          height: 'calc(100% - 64px)',
           backgroundColor: '#fafafa',
           borderRight: '1px solid #e0e0e0',
         },
       }}
     >
-      <Box sx={{ p: 2 }}>
-        <Typography variant="h6" sx={{ fontWeight: 600, color: '#333', fontSize: '1.1rem' }}>
-          Menu Principale
-        </Typography>
-      </Box>
-      <Divider />
-      
-      <List sx={{ pt: 1, px: 1 }}>
-        {menuItems.map((item) => (
-          <Box key={item.text}>
-            {item.isExpandable ? (
-              <>
-                <ListItemButton
-                  onClick={item.onToggle}
-                  sx={{
-                    mb: 0.5,
-                    borderRadius: '8px',
-                    minHeight: '48px',
-                    '&:hover': {
-                      backgroundColor: '#f0f0f0',
-                    },
-                  }}
-                >
-                  <ListItemIcon sx={{ color: '#666', minWidth: '40px' }}>
-                    {item.icon}
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={item.text}
-                    sx={{ 
-                      '& .MuiTypography-root': { 
-                        fontWeight: 500,
-                        fontSize: '0.95rem'
-                      } 
-                    }}
-                  />
-                  {item.expanded ? <ExpandLess /> : <ExpandMore />}
-                </ListItemButton>
-                <Collapse in={item.expanded} timeout="auto" unmountOnExit>
-                  <List component="div" disablePadding>
-                    {item.subItems?.map((subItem) => (
-                      <ListItemButton
-                        key={subItem.text}
-                        onClick={subItem.action}
-                        selected={isActive(subItem.path)}
-                        sx={{
-                          pl: 4,
-                          mb: 0.5,
-                          borderRadius: '8px',
-                          minHeight: '44px',
-                          '&:hover': {
-                            backgroundColor: '#f0f0f0',
-                          },
-                          '&.Mui-selected': {
-                            backgroundColor: '#e3f2fd',
-                            '&:hover': {
-                              backgroundColor: '#e3f2fd',
-                            },
-                            '& .MuiListItemIcon-root': {
-                              color: '#1976d2',
-                            },
-                            '& .MuiListItemText-primary': {
-                              color: '#1976d2',
-                              fontWeight: 600,
-                            },
-                          },
-                        }}
-                      >
-                        <ListItemIcon sx={{ 
-                          minWidth: '36px',
-                          color: isActive(subItem.path) ? '#1976d2' : '#666'
-                        }}>
-                          {subItem.icon}
-                        </ListItemIcon>
-                        <ListItemText 
-                          primary={subItem.text}
-                          sx={{ 
-                            '& .MuiTypography-root': { 
-                              fontSize: '0.9rem'
-                            } 
-                          }}
-                        />
-                      </ListItemButton>
-                    ))}
-                  </List>
-                </Collapse>
-              </>
-            ) : (
-              <ListItemButton
-                onClick={item.action}
-                selected={item.exact ? isActive(item.path!, true) : isActive(item.path!)}
-                sx={{
-                  mb: 0.5,
-                  borderRadius: '8px',
-                  minHeight: '48px',
-                  '&:hover': {
-                    backgroundColor: '#f0f0f0',
-                  },
-                  '&.Mui-selected': {
-                    backgroundColor: '#e3f2fd',
-                    '&:hover': {
-                      backgroundColor: '#e3f2fd',
-                    },
-                    '& .MuiListItemIcon-root': {
-                      color: '#1976d2',
-                    },
-                    '& .MuiListItemText-primary': {
-                      color: '#1976d2',
-                      fontWeight: 600,
-                    },
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ 
-                  color: (item.exact ? isActive(item.path!, true) : isActive(item.path!)) ? '#1976d2' : '#666',
-                  minWidth: '40px'
-                }}>
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText 
-                  primary={item.text}
-                  sx={{ 
-                    '& .MuiTypography-root': { 
-                      fontWeight: 500,
-                      fontSize: '0.95rem'
-                    } 
-                  }}
-                />
-              </ListItemButton>
-            )}
-          </Box>
-        ))}
-      </List>
+      {drawer}
     </Drawer>
   );
 };
