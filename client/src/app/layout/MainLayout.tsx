@@ -27,7 +27,6 @@ import {
   Group,
   Domain,
   Add,
-  AccountCircle,
   Description as DescriptionIcon,  // <-- Import aggiunto
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
