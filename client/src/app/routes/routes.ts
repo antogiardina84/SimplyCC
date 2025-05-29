@@ -22,6 +22,7 @@ const Profile = lazy(() => import('../../modules/profile/pages/Profile'));
 const PickupOrderList = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderList'));
 const PickupOrderForm = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderForm'));
 const PickupOrderDetail = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderDetail'));
+const PickupOrderUpload = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderUpload')); // <-- aggiunta
 
 // Placeholder per pagine non ancora implementate
 const PlaceholderPage = lazy(() => import('../../core/components/PlaceholderPage'));
@@ -92,6 +93,11 @@ export const routes: RouteConfig[] = [
     protected: true,
   },
   {
+    path: '/pickup-orders/upload',   // <-- nuova rotta upload
+    element: PickupOrderUpload,
+    protected: true,
+  },
+  {
     path: '/pickup-orders/:id',
     element: PickupOrderDetail,
     protected: true,
@@ -118,6 +124,7 @@ export const routes: RouteConfig[] = [
     element: BasinForm,
     protected: true,
   },
+
   {
     path: '/deliveries',
     element: PlaceholderPage,

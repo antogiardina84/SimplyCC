@@ -7,8 +7,8 @@ import { Container, Typography, Button, Paper, Table, TableBody, TableCell, Tabl
 import { Add, Edit, Delete, Visibility } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
-import * as pickupOrderService from '../services/pickupOrderService';
-import type { PickupOrder, PickupOrderStatus } from '../services/pickupOrderService';
+import * as pickupOrderService from '../services/ocrPickupOrderService';
+import type { PickupOrder, PickupOrderStatus } from '../services/ocrPickupOrderService';
 
 const PickupOrderList = () => {
   const navigate = useNavigate();

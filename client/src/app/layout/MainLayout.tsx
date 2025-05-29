@@ -28,6 +28,7 @@ import {
   Domain,
   Add,
   AccountCircle,
+  Description as DescriptionIcon,  // <-- Import aggiunto
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -110,6 +111,11 @@ const menuItems: MenuItem[] = [
         text: 'Conferimenti',
         icon: <LocalShipping />,
         path: '/deliveries',
+      },
+      {
+        text: 'Carica Buoni di Ritiro',      // <-- Nuova voce aggiunta
+        icon: <DescriptionIcon />,          // <-- Icona aggiunta
+        path: '/pickup-orders/upload',      // <-- Percorso associato
       },
     ],
   },
@@ -265,7 +271,6 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           '&:hover': {
             backgroundColor: '#555555 !important',
           },
-          // Forza la visibilità
           visibility: 'visible !important',
           opacity: '1 !important',
         }}

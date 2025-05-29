@@ -6,8 +6,8 @@ import { Container, Typography, Paper, Box, Grid, Chip, Button, Alert, CircularP
 import { Edit, ArrowBack } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
-import * as pickupOrderService from '../services/pickupOrderService';
-import type { PickupOrder, PickupOrderStatus } from '../services/pickupOrderService';
+import * as pickupOrderService from '../services/ocrPickupOrderService';
+import type { PickupOrder, PickupOrderStatus } from '../services/ocrPickupOrderService';
 
 const PickupOrderDetail = () => {
   const { id } = useParams<{ id: string }>();

@@ -6,10 +6,10 @@ import { Container, Typography, TextField, Button, Paper, Box, FormControl,
   InputLabel, Select, MenuItem, Alert, CircularProgress, Grid } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
 import { format } from 'date-fns';
-import * as pickupOrderService from '../services/pickupOrderService';
+import * as pickupOrderService from '../services/ocrPickupOrderService';
 import * as clientService from '../../clients/services/clientService';
 import * as basinService from '../../basins/services/basinService';
-import type { CreatePickupOrderData, UpdatePickupOrderData } from '../services/pickupOrderService';
+import type { CreatePickupOrderData, UpdatePickupOrderData } from '../services/ocrPickupOrderService';
 import type { Client } from '../../clients/services/clientService';
 import type { Basin } from '../../basins/services/basinService';
 

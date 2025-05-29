@@ -156,6 +156,17 @@ const Sidebar = ({ open, onToggle, drawerWidth }: SidebarProps) => {
               </ListItemIcon>
               <ListItemText primary="Buoni di Ritiro" />
             </ListItemButton>
+
+            <ListItemButton
+              sx={{ pl: 4, mb: 0.5, borderRadius: 1 }}
+              onClick={() => handleNavigation('/pickuporder/upload')}
+              selected={isActive('/pickuporder/upload')}
+            >
+              <ListItemIcon>
+                <DescriptionIcon />
+              </ListItemIcon>
+              <ListItemText primary="Carica Buoni di Ritiro" />
+            </ListItemButton>
             
             <ListItemButton
               sx={{ pl: 4, mb: 0.5, borderRadius: 1 }}

@@ -1,22 +1,23 @@
 // server/src/modules/basins/routes/index.ts
 
 import { Router } from 'express';
-import { getAllBasins, getBasinsByClientId, getBasinById, createBasin, updateBasin, deleteBasin } from '../controllers';
-import { authMiddleware, checkRole } from '../../../core/middleware/auth.middleware';
+import { authMiddleware } from '../../../core/middleware/auth.middleware';
+import * as basinController from '../controllers/index';
 
 const router = Router();
 
-// Protezione delle route con autenticazione
+// Proteggi tutte le route con autenticazione
 router.use(authMiddleware);
 
-// Route accessibili a tutti gli utenti autenticati
-router.get('/', getAllBasins);
-router.get('/client/:clientId', getBasinsByClientId);
-router.get('/:id', getBasinById);
+// Routes CRUD principali
+router.get('/', basinController.getAllBasins);
+router.get('/stats', basinController.getBasinStats);
+router.get('/search', basinController.searchBasinsByCode);
+router.get('/check-code', basinController.checkBasinCodeAvailability);
+router.get('/client/:clientId', basinController.getBasinsByClient);
+router.get('/:id', basinController.getBasinById);
+router.post('/', basinController.createBasin);
+router.put('/:id', basinController.updateBasin);
+router.delete('/:id', basinController.deleteBasin);
 
-// Route accessibili solo a manager e admin
-router.post('/', checkRole(['ADMIN', 'MANAGER']), createBasin);
-router.put('/:id', checkRole(['ADMIN', 'MANAGER']), updateBasin);
-router.delete('/:id', checkRole(['ADMIN', 'MANAGER']), deleteBasin);
-
-export const basinRoutes = router;
+export { router as basinRoutes };

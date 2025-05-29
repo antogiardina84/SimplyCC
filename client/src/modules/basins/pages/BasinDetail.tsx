@@ -10,9 +10,9 @@ import { Edit, ArrowBack, Domain, Business, Assignment, Visibility,
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import * as basinService from '../services/basinService';
-import * as pickupOrderService from '../../pickupOrders/services/pickupOrderService';
+import * as pickupOrderService from '../../pickupOrders/services/ocrPickupOrderService';
 import type { Basin } from '../services/basinService';
-import type { PickupOrder } from '../../pickupOrders/services/pickupOrderService';
+import type { PickupOrder } from '../../pickupOrders/services/ocrPickupOrderService';
 
 const BasinDetail = () => {
   const { id } = useParams<{ id: string }>();

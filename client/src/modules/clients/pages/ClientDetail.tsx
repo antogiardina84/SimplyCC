@@ -11,10 +11,10 @@ import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import * as clientService from '../services/clientService';
 import * as basinService from '../../basins/services/basinService';
-import * as pickupOrderService from '../../pickupOrders/services/pickupOrderService';
+import * as pickupOrderService from '../../pickupOrders/services/ocrPickupOrderService';
 import type { Client } from '../services/clientService';
 import type { Basin } from '../../basins/services/basinService';
-import type { PickupOrder } from '../../pickupOrders/services/pickupOrderService';
+import type { PickupOrder } from '../../pickupOrders/services/ocrPickupOrderService';
 
 const ClientDetail = () => {
   const { id } = useParams<{ id: string }>();

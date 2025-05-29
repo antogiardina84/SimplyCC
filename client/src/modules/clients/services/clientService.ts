@@ -24,9 +24,6 @@ export interface Basin {
   code: string;
   description?: string;
   flowType: string;
-  clientId: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface CreateClientData {
@@ -55,27 +52,62 @@ export interface UpdateClientData {
   contractId?: string;
 }
 
+/**
+ * Ottiene tutti i clienti
+ */
 export const getClients = async (): Promise<Client[]> => {
   const response = await api.get('/clients');
   return response.data;
 };
 
+/**
+ * Ottiene un cliente per ID
+ */
 export const getClientById = async (id: string): Promise<Client> => {
   const response = await api.get(`/clients/${id}`);
   return response.data;
 };
 
-export const createClient = async (clientData: CreateClientData): Promise<Client> => {
-  const response = await api.post('/clients', clientData);
+/**
+ * Crea un nuovo cliente
+ */
+export const createClient = async (data: CreateClientData): Promise<Client> => {
+  const response = await api.post('/clients', data);
   return response.data;
 };
 
-export const updateClient = async (id: string, clientData: UpdateClientData): Promise<Client> => {
-  const response = await api.put(`/clients/${id}`, clientData);
+/**
+ * Aggiorna un cliente esistente
+ */
+export const updateClient = async (id: string, data: UpdateClientData): Promise<Client> => {
+  const response = await api.put(`/clients/${id}`, data);
   return response.data;
 };
 
-export const deleteClient = async (id: string): Promise<Client> => {
-  const response = await api.delete(`/clients/${id}`);
+/**
+ * Elimina un cliente
+ */
+export const deleteClient = async (id: string): Promise<void> => {
+  await api.delete(`/clients/${id}`);
+};
+
+/**
+ * Cerca clienti per nome o partita IVA
+ */
+export const searchClients = async (query: string): Promise<Client[]> => {
+  const response = await api.get(`/clients/search?q=${encodeURIComponent(query)}`);
   return response.data;
+};
+
+/**
+ * Verifica se una partita IVA è disponibile
+ */
+export const checkVatNumberAvailability = async (vatNumber: string, excludeId?: string): Promise<boolean> => {
+  const params = new URLSearchParams({ vatNumber });
+  if (excludeId) {
+    params.append('excludeId', excludeId);
+  }
+  
+  const response = await api.get(`/clients/check-vat?${params}`);
+  return response.data.available;
 };
