@@ -2,7 +2,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { OCRPickupOrderService, ExtractedPickupOrderData } from '../services/ocrpickupOrder.service';
+import { OCRPickupOrderService, ExtractedPickupOrderData } from '../services/ocrPickupOrder.service';
 import * as pickupOrderService from '../services/pickupOrders.service';
 import * as clientService from '../../clients/services/clients.service';
 import * as basinService from '../../basins/services/basins.service';
