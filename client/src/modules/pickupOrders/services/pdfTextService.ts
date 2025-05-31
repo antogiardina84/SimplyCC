@@ -129,6 +129,66 @@ const parseItalianDate = (dateString: string): Date | undefined => {
 };
 
 /**
+ * Trova tutti i numeri lunghi nel testo e li classifica per probabilità
+ */
+const extractAllNumbers = (text: string) => {
+  const numberPatterns = [
+    { pattern: /(\d{9,12})/g, type: 'long_number' },
+    { pattern: /(\d{7,8})/g, type: 'medium_number' },
+    { pattern: /(\d+[,.]\d+)/g, type: 'decimal_number' }
+  ];
+  
+  const foundNumbers: Array<{ value: string; type: string; position: number }> = [];
+  
+  numberPatterns.forEach(({ pattern, type }) => {
+    let match;
+    pattern.lastIndex = 0; // Reset regex
+    while ((match = pattern.exec(text)) !== null) {
+      foundNumbers.push({
+        value: match[1],
+        type: type,
+        position: match.index
+      });
+    }
+  });
+  
+  return foundNumbers.sort((a, b) => a.position - b.position);
+};
+
+/**
+ * Trova tutte le possibili entità aziendali nel testo
+ */
+const extractCompanyNames = (text: string) => {
+  const companyPatterns = [
+    // Pattern per aziende con prefissi comuni
+    /(?:CC|CSS|SPA|SRL|S\.R\.L\.|S\.P\.A\.)\s+([A-Z][A-Z\s&]{3,30})/gi,
+    // Pattern per nomi aziendali generici
+    /\b([A-Z][A-Z\s&]{5,30}(?:SPA|SRL|S\.R\.L\.|S\.P\.A\.))\b/gi,
+    // Pattern per nomi senza suffissi legali
+    /\b([A-Z][A-Z\s]{3,20}(?:RICYCLE|PLASTIC|ECO|GREEN|AMBIENTE))\b/gi
+  ];
+  
+  const foundCompanies: Array<{ name: string; type: string; position: number }> = [];
+  
+  companyPatterns.forEach((pattern, index) => {
+    let match;
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(text)) !== null) {
+      const cleanName = match[1].trim();
+      if (cleanName.length > 3) {
+        foundCompanies.push({
+          name: cleanName,
+          type: `company_pattern_${index}`,
+          position: match.index
+        });
+      }
+    }
+  });
+  
+  return foundCompanies.sort((a, b) => a.position - b.position);
+};
+
+/**
  * Processa il testo estratto dal PDF e ne estrae i dati strutturati
  */
 const processExtractedText = (fullContent: string): PDFExtractionResponse => {
@@ -158,38 +218,85 @@ const processExtractedText = (fullContent: string): PDFExtractionResponse => {
 
   // Pulisci il testo rimuovendo spazi extra e line breaks multipli
   const cleanText = fullContent.replace(/\s+/g, ' ').trim();
-
   console.log('Testo estratto:', cleanText);
 
-  // Estrazione Numero Buono
-  const orderNumberPatterns = [
-    /N°:\s*(\d+)/i,
-    /N°\s*:\s*(\d+)/i,
-    /Numero.*?(\d{10,})/i,
-    /BUONO DI RITIRO.*?(\d{10,})/i,
-    /(\d{11})/  // Pattern generico per numeri lunghi
-  ];
+  // Estrai tutti i numeri dal documento
+  const allNumbers = extractAllNumbers(cleanText);
+  console.log('Numeri trovati:', allNumbers);
+
+  // Estrai tutte le aziende dal documento
+  const allCompanies = extractCompanyNames(cleanText);
+  console.log('Aziende trovate:', allCompanies);
+
+  // ESTRAZIONE NUMERO BUONO - il secondo numero lungo dopo "PROD"
+  const orderNumberCandidates = allNumbers
+    .filter(n => n.type === 'long_number' && n.value.length >= 10 && n.value.length <= 12)
+    .filter(n => n.position < cleanText.length * 0.3); // Primi 30% del documento
   
-  for (const pattern of orderNumberPatterns) {
-    const match = cleanText.match(pattern);
-    if (match && match[1]) {
-      extractedData.orderNumber = match[1].trim();
-      console.log('Numero buono trovato:', extractedData.orderNumber);
-      break;
-    }
-  }
+  // Cerca specificamente dopo "PROD"
+  const prodPattern = /PROD\s+\d+\s+(\d{11,})/i;
+  const prodMatch = cleanText.match(prodPattern);
   
-  if (!extractedData.orderNumber) {
+  if (prodMatch && prodMatch[1]) {
+    extractedData.orderNumber = prodMatch[1];
+    console.log('Numero buono trovato (dopo PROD):', extractedData.orderNumber);
+  } else if (orderNumberCandidates.length >= 2) {
+    // Prendi il secondo numero se ci sono almeno 2 numeri
+    extractedData.orderNumber = orderNumberCandidates[1].value;
+    console.log('Numero buono trovato (secondo numero):', extractedData.orderNumber);
+  } else if (orderNumberCandidates.length > 0) {
+    extractedData.orderNumber = orderNumberCandidates[0].value;
+    console.log('Numero buono trovato (primo numero):', extractedData.orderNumber);
+  } else {
     needsReview.push('orderNumber');
     overallConfidence -= 15;
     console.log('Numero buono NON trovato');
   }
 
-  // Estrazione Data Emissione
+  // ESTRAZIONE BACINO - cerca nella sezione "Lista bacini"
+  let basinCode = '';
+  
+  // Pattern prioritario: cerca nella sezione "Lista bacini"
+  const basinListPattern = /Lista bacini\s+(\d{7})/i;
+  const listMatch = cleanText.match(basinListPattern);
+  
+  if (listMatch && listMatch[1]) {
+    basinCode = listMatch[1];
+    console.log('Codice bacino trovato (Lista bacini):', basinCode);
+  } else {
+    // Fallback: cerca pattern "Bacino" seguito da numero
+    const basinPattern = /Bacino[^0-9]*(\d{7})/i;
+    const basinMatch = cleanText.match(basinPattern);
+    
+    if (basinMatch && basinMatch[1]) {
+      basinCode = basinMatch[1];
+      console.log('Codice bacino trovato (pattern Bacino):', basinCode);
+    } else {
+      // Ultimo fallback: cerca numeri di 7 cifre che non siano l'ordine
+      const basinCandidates = allNumbers
+        .filter(n => n.type === 'medium_number' && n.value.length === 7)
+        .filter(n => n.value !== extractedData.orderNumber);
+      
+      if (basinCandidates.length > 0) {
+        basinCode = basinCandidates[0].value;
+        console.log('Codice bacino trovato (fallback):', basinCode);
+      }
+    }
+  }
+  
+  if (basinCode) {
+    extractedData.basinCode = basinCode;
+  } else {
+    needsReview.push('basinCode');
+    overallConfidence -= 15;
+    console.log('Codice bacino NON trovato');
+  }
+
+  // ESTRAZIONE DATA EMISSIONE - pattern flessibili
   const issueDatePatterns = [
-    /Data emissione buono\s*(\d{1,2}\s+\w+\s+\d{4})/i,
-    /Data emissione.*?(\d{1,2}\s+\w+\s+\d{4})/i,
-    /emissione.*?(\d{1,2}\s+\w+\s+\d{4})/i
+    /Data emissione[^0-9]*(\d{1,2}\s+\w+\s+\d{4})/i,
+    /emissione[^0-9]*(\d{1,2}\s+\w+\s+\d{4})/i,
+    /(\d{1,2}\s+(?:gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre)\s+\d{4})/i
   ];
   
   for (const pattern of issueDatePatterns) {
@@ -203,33 +310,11 @@ const processExtractedText = (fullContent: string): PDFExtractionResponse => {
       }
     }
   }
-  
-  if (!extractedData.issueDate || isNaN(extractedData.issueDate.getTime())) {
-    needsReview.push('issueDate');
-    overallConfidence -= 10;
-    console.log('Data emissione NON trovata');
-  }
 
-  // Estrazione Trasportatore
-  const transportTypePatterns = [
-    /Trasportatore\s*([^\n]+)/i,
-    /TRASPORTATORE\s*([^\n]+)/i
-  ];
-  
-  for (const pattern of transportTypePatterns) {
-    const match = cleanText.match(pattern);
-    if (match && match[1]) {
-      extractedData.transportType = match[1].trim().replace(/^-+\s*/, '');
-      console.log('Trasportatore trovato:', extractedData.transportType);
-      break;
-    }
-  }
-
-  // Estrazione Mittente
+  // ESTRAZIONE MITTENTE - primo nome azienda dopo "CC" o in sezione mittente
   const senderPatterns = [
-    /Mittente\s+([A-Z][A-Z\s&]+(?:RICYCLE|SPA|SRL|S\.R\.L\.|S\.P\.A\.))/i,
-    /CC\s+([A-Z][A-Z\s&]+RICYCLE)/i,
-    /(DOMUS\s+RICYCLE)/i
+    /(?:Mittente|CC)\s+([A-Z][A-Z\s&]{3,30})(?:\s+[A-Z]{2,5}\s+[A-Z]|$)/i,
+    /CC\s+([A-Z][A-Z\s&]{3,30})/i
   ];
   
   for (const pattern of senderPatterns) {
@@ -241,25 +326,64 @@ const processExtractedText = (fullContent: string): PDFExtractionResponse => {
     }
   }
   
+  // Fallback: usa la prima azienda trovata se nessun pattern specifico ha funzionato
+  if (!extractedData.senderName && allCompanies.length > 0) {
+    extractedData.senderName = allCompanies[0].name;
+    console.log('Mittente trovato (fallback):', extractedData.senderName);
+    overallConfidence -= 5;
+  }
+  
   if (!extractedData.senderName) {
     needsReview.push('senderName');
     overallConfidence -= 15;
     console.log('Mittente NON trovato');
   }
 
-  // Estrazione Destinatario
+  // ESTRAZIONE DESTINATARIO - pattern migliorati per evitare false match
   const recipientPatterns = [
-    /Destinatario\s+([A-Z][A-Z\s&]+(?:SPA|SRL|S\.R\.L\.|S\.P\.A\.))/i,
-    /CSS\s+([A-Z][A-Z\s&]+SPA)/i,
-    /(ECOLOGISTIC\s+SPA)/i
+    // Pattern specifico per CSS seguito da nome azienda
+    /CSS\s+([A-Z][A-Z\s&]{3,30})(?:\s+Contrada|\s+Via|\s+\d{5})/i,
+    // Pattern per nomi che terminano con SPA
+    /CSS\s+([A-Z\s]+SPA)(?:\s+Contrada|\s+Via)/i,
+    // Pattern più generico come fallback
+    /(?:Destinatario.*?)?CSS\s+([A-Z][A-Z\s&]{5,30})/i
   ];
   
   for (const pattern of recipientPatterns) {
     const match = cleanText.match(pattern);
     if (match && match[1]) {
-      extractedData.recipientName = match[1].trim();
-      console.log('Destinatario trovato:', extractedData.recipientName);
-      break;
+      const recipientName = match[1].trim();
+      // Verifica che non sia una stringa generica
+      if (!recipientName.includes('Distanza') && !recipientName.includes('Note') && !recipientName.includes('Data')) {
+        extractedData.recipientName = recipientName;
+        console.log('Destinatario trovato:', extractedData.recipientName);
+        break;
+      }
+    }
+  }
+  
+  // Fallback: cerca specificamente "ECOLOGISTIC SPA" o simili
+  if (!extractedData.recipientName) {
+    const specificRecipientPattern = /(ECOLOGISTIC\s+SPA)/i;
+    const specificMatch = cleanText.match(specificRecipientPattern);
+    if (specificMatch) {
+      extractedData.recipientName = specificMatch[1].trim();
+      console.log('Destinatario trovato (specifico):', extractedData.recipientName);
+    } else {
+      // Fallback finale: usa la seconda azienda diversa dal mittente
+      if (allCompanies.length > 1) {
+        for (const company of allCompanies) {
+          if (company.name !== extractedData.senderName && 
+              !company.name.includes('Distanza') && 
+              !company.name.includes('Note') && 
+              !company.name.includes('Data')) {
+            extractedData.recipientName = company.name;
+            console.log('Destinatario trovato (fallback):', extractedData.recipientName);
+            overallConfidence -= 5;
+            break;
+          }
+        }
+      }
     }
   }
   
@@ -269,26 +393,72 @@ const processExtractedText = (fullContent: string): PDFExtractionResponse => {
     console.log('Destinatario NON trovato');
   }
 
-  // Estrazione Distanza
+  // ESTRAZIONE TIPO FLUSSO - cerca lettere singole in contesti appropriati
+  const flowTypePatterns = [
+    /Tipo Flusso[^A-Z]*([A-Z])\s/i,
+    /Flusso[^A-Z]*([A-Z])\s/i,
+    /Lista bacini[^A-Z]*([A-Z])\s/i,
+    /\b([A-D])\s+Data(?:\s+Disponibilità|$)/i // Pattern più specifico
+  ];
+  
+  for (const pattern of flowTypePatterns) {
+    const match = cleanText.match(pattern);
+    if (match && match[1] && /[A-D]/.test(match[1])) {
+      extractedData.flowType = match[1].trim();
+      console.log('Tipo flusso trovato:', extractedData.flowType);
+      break;
+    }
+  }
+  
+  if (!extractedData.flowType) {
+    needsReview.push('flowType');
+    overallConfidence -= 10;
+    console.log('Tipo flusso NON trovato');
+  }
+
+  // ESTRAZIONE DISTANZA - cerca numeri con decimali vicino a indicatori di distanza
   const distancePatterns = [
-    /Distanza Chilometrica\s*(\d+[,.]?\d*)/i,
-    /Distanza.*?(\d+[,.]?\d*)/i,
-    /(\d+[,.]?\d+)\s*km/i
+    /(\d+[,.]\d+)\s*(?:km|'CIT'|CIT)/i,
+    /(?:Distanza|km)[^0-9]*(\d+[,.]\d+)/i,
+    /(\d{3}[,.]\d{3})/  // Pattern per numeri con formato xxx,xxx
   ];
   
   for (const pattern of distancePatterns) {
     const match = cleanText.match(pattern);
     if (match && match[1]) {
-      extractedData.distanceKm = parseFloat(match[1].replace(',', '.'));
-      console.log('Distanza trovata:', extractedData.distanceKm);
+      const distance = parseFloat(match[1].replace(',', '.'));
+      if (!isNaN(distance) && distance > 0 && distance < 10000) { // Validazione ragionevole
+        extractedData.distanceKm = distance;
+        console.log('Distanza trovata:', extractedData.distanceKm);
+        break;
+      }
+    }
+  }
+
+  // ESTRAZIONE DESCRIZIONE BACINO - cerca "COMUNE DI" o nomi geografici
+  const basinDescriptionPatterns = [
+    /(COMUNE\s+DI\s+[A-Z]+)/i,
+    // Pattern per nomi aziendali completi (nome + ragione sociale)
+    new RegExp(`${extractedData.basinCode}\\s+([A-Z][A-Z\\s&]+(?:SRL|SPA|S\\.R\\.L\\.|S\\.P\\.A\\.))`, 'i'),
+    // Pattern per qualsiasi nome prima del tipo flusso
+    new RegExp(`${extractedData.basinCode}\\s+([A-Z][A-Z\\s&]{3,30})\\s+${extractedData.flowType}`, 'i'),
+    // Pattern generico per nomi prima del tipo flusso
+    /([A-Z][A-Z\s&]{5,30})\s+[A-Z]\s+Data/i
+  ];
+  
+  for (const pattern of basinDescriptionPatterns) {
+    const match = cleanText.match(pattern);
+    if (match && match[1]) {
+      extractedData.basinDescription = match[1].trim();
+      console.log('Descrizione bacino trovata:', extractedData.basinDescription);
       break;
     }
   }
 
-  // Estrazione Date Carico/Scarico
+  // ESTRAZIONE DATE CARICO/SCARICO
   const loadingPatterns = [
-    /Data Carico\s*\/\s*Scarico tra\s*(\d{1,2}\s+\w+\s+\d{4})\s*\/\s*(\d{1,2}\s+\w+\s+\d{4})/i,
-    /(\d{1,2}\s+\w+\s+\d{4})\s*\/\s*(\d{1,2}\s+\w+\s+\d{4})/
+    /(\d{1,2}\s+\w+\s+\d{4})\s*\/\s*(\d{1,2}\s+\w+\s+\d{4})/,
+    /Carico[^0-9]*(\d{1,2}\s+\w+\s+\d{4})[^0-9]*(\d{1,2}\s+\w+\s+\d{4})/i
   ];
   
   for (const pattern of loadingPatterns) {
@@ -301,43 +471,20 @@ const processExtractedText = (fullContent: string): PDFExtractionResponse => {
     }
   }
 
-  // Estrazione Data Disponibilità
-  const availabilityPatterns = [
-    /Data Disponibilità\s*(\d{1,2}\s+\w+\s+\d{4})/i,
-    /Disponibilità\s*(\d{1,2}\s+\w+\s+\d{4})/i
+  // ESTRAZIONE TRASPORTATORE - cerca testo tra apici o dopo "Trasportatore"
+  const transportPatterns = [
+    /'([^']{1,20})'/,
+    /Trasportatore[^A-Z]*([A-Z]{2,10})/i,
+    /"([^"]{1,20})"/
   ];
   
-  for (const pattern of availabilityPatterns) {
+  for (const pattern of transportPatterns) {
     const match = cleanText.match(pattern);
-    if (match && match[1]) {
-      extractedData.availabilityDate = parseItalianDate(match[1].trim());
-      console.log('Data disponibilità trovata:', extractedData.availabilityDate);
+    if (match && match[1] && match[1].trim().length > 0) {
+      extractedData.transportType = match[1].trim();
+      console.log('Trasportatore trovato:', extractedData.transportType);
       break;
     }
-  }
-
-  // Estrazione Bacino e Tipo Flusso
-  const basinPatterns = [
-    /Lista bacini.*?(\d{7})\s+([A-Z])\s+([A-Z\s]+)/i,
-    /Bacino.*?(\d{7})\s+([A-Z])\s+([A-Z\s]+)/i,
-    /(\d{7})\s+([A-Z])\s+(COMUNE\s+DI\s+[A-Z]+)/i
-  ];
-  
-  for (const pattern of basinPatterns) {
-    const match = cleanText.match(pattern);
-    if (match && match[1] && match[2]) {
-      extractedData.basinCode = match[1].trim();
-      extractedData.flowType = match[2].trim();
-      extractedData.basinDescription = match[3] ? match[3].trim() : '';
-      console.log('Bacino trovato:', extractedData.basinCode, extractedData.flowType, extractedData.basinDescription);
-      break;
-    }
-  }
-  
-  if (!extractedData.basinCode || !extractedData.flowType) {
-    needsReview.push('basinCode', 'flowType');
-    overallConfidence -= 20;
-    console.log('Bacino o tipo flusso NON trovati');
   }
 
   // Assicurati che basinDescription sia sempre una stringa
@@ -349,46 +496,47 @@ const processExtractedText = (fullContent: string): PDFExtractionResponse => {
   extractedData.confidence = Math.max(0, overallConfidence);
   qualityScore = Math.max(0, qualityScore - (needsReview.length * 5));
 
-  // Simulazione suggerimenti entità (mantengo la stessa logica dell'OCR)
-  const simulatedSenders: MatchedEntity[] = [
-    { id: 's_domus', name: 'CC DOMUS RICYCLE', similarity: extractedData.senderName.includes('DOMUS') ? 1.0 : 0.7 },
-    { id: 's_other', name: 'Altro Mittente S.p.A.', similarity: 0.2 },
-  ];
-  
-  const simulatedRecipients: MatchedEntity[] = [
-    { id: 'r_ecologistic', name: 'CSS ECOLOGISTIC SPA', similarity: extractedData.recipientName.includes('ECOLOGISTIC') ? 1.0 : 0.7 },
-    { id: 'r_another', name: 'Altro Destinatario S.r.l.', similarity: 0.3 },
-  ];
-  
-  const simulatedBasins: MatchedEntity[] = [
-    { 
-      id: 'b_siracusa', 
-      name: 'COMUNE DI SIRACUSA', 
-      code: '2002048', 
-      description: 'COMUNE DI SIRACUSA', 
-      similarity: extractedData.basinCode === '2002048' ? 1.0 : 0.6 
-    },
-    { 
-      id: 'b_acireale', 
-      name: 'COMUNE DI ACIREALE', 
-      code: '9875090', 
-      description: 'COMUNE DI ACIREALE', 
-      similarity: extractedData.basinCode === '9875090' ? 1.0 : 0.8 
-    },
-  ];
+  // SUGGERIMENTI DINAMICI - basati sui dati effettivamente trovati
+  matchedEntities.suggestions.senders = allCompanies
+    .filter(c => c.name !== extractedData.recipientName)
+    .slice(0, 3)
+    .map((company, index) => ({
+      id: `sender_${index}`,
+      name: company.name,
+      similarity: company.name === extractedData.senderName ? 1.0 : 0.7 - (index * 0.1)
+    }));
 
-  matchedEntities.suggestions.senders = simulatedSenders.sort((a, b) => b.similarity - a.similarity);
-  matchedEntities.suggestions.recipients = simulatedRecipients.sort((a, b) => b.similarity - a.similarity);
-  matchedEntities.suggestions.basins = simulatedBasins.sort((a, b) => b.similarity - a.similarity);
+  matchedEntities.suggestions.recipients = allCompanies
+    .filter(c => c.name !== extractedData.senderName)
+    .slice(0, 3)
+    .map((company, index) => ({
+      id: `recipient_${index}`,
+      name: company.name,
+      similarity: company.name === extractedData.recipientName ? 1.0 : 0.7 - (index * 0.1)
+    }));
 
-  // Assegna le migliori corrispondenze se la similarità è alta
-  if (matchedEntities.suggestions.senders[0]?.similarity > 0.9) {
+  // Per i bacini, suggeriamo quello trovato più alcuni generici
+  const basinSuggestions = [];
+  if (extractedData.basinCode) {
+    basinSuggestions.push({
+      id: `basin_found`,
+      name: extractedData.basinDescription || 'Bacino Rilevato',
+      code: extractedData.basinCode,
+      description: extractedData.basinDescription,
+      similarity: 1.0
+    });
+  }
+  
+  matchedEntities.suggestions.basins = basinSuggestions;
+
+  // Assegna le migliori corrispondenze
+  if (matchedEntities.suggestions.senders[0]?.similarity === 1.0) {
     matchedEntities.sender = matchedEntities.suggestions.senders[0];
   }
-  if (matchedEntities.suggestions.recipients[0]?.similarity > 0.9) {
+  if (matchedEntities.suggestions.recipients[0]?.similarity === 1.0) {
     matchedEntities.recipient = matchedEntities.suggestions.recipients[0];
   }
-  if (matchedEntities.suggestions.basins[0]?.similarity > 0.9) {
+  if (matchedEntities.suggestions.basins[0]?.similarity === 1.0) {
     matchedEntities.basin = matchedEntities.suggestions.basins[0];
   }
 
