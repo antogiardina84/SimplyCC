@@ -27,7 +27,6 @@ import {
   Group,
   Domain,
   Add,
-  Description as DescriptionIcon,  // <-- Import aggiunto
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -93,28 +92,23 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
-    text: 'Ordini & Ritiri',
+    text: 'Conferimenti',
+    icon: <LocalShipping />,
+    path: '/deliveries',
+  },
+  {
+    text: 'Buoni di Ritiro',
     icon: <Assignment />,
     children: [
       {
-        text: 'Buoni di Ritiro',
+        text: 'Lista Buoni',
         icon: <Assignment />,
         path: '/pickup-orders',
       },
       {
-        text: 'Nuovo Ordine',
+        text: 'Carica da PDF',
         icon: <Add />,
-        path: '/pickup-orders/new',
-      },
-      {
-        text: 'Conferimenti',
-        icon: <LocalShipping />,
-        path: '/deliveries',
-      },
-      {
-        text: 'Carica Buoni di Ritiro',      // <-- Nuova voce aggiunta
-        icon: <DescriptionIcon />,          // <-- Icona aggiunta
-        path: '/pickup-orders/upload',      // <-- Percorso associato
+        path: '/pickup-orders/upload',
       },
     ],
   },
@@ -151,7 +145,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   const isMobile = useMediaQuery('(max-width: 1199px)'); // Breakpoint più preciso
   
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [expandedItems, setExpandedItems] = useState<string[]>(['Clienti & Bacini', 'Ordini & Ritiri']);
+  const [expandedItems, setExpandedItems] = useState<string[]>(['Clienti & Bacini', 'Buoni di Ritiro']);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -270,6 +264,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           '&:hover': {
             backgroundColor: '#555555 !important',
           },
+          // Forza la visibilità
           visibility: 'visible !important',
           opacity: '1 !important',
         }}

@@ -9,10 +9,10 @@ import ProtectedRoute from './ProtectedRoute';
 const Dashboard = lazy(() => import('../../modules/dashboard/pages/Dashboard'));
 const Login = lazy(() => import('../../modules/auth/pages/Login'));
 
-// Pickup Orders - ATTENZIONE: Usa il nome corretto del file
+// Pickup Orders
 const PickupOrderList = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderList'));
 const PickupOrderForm = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderForm'));
-const PickupOrderDetail = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderDetail')); // Nome corretto
+const PickupOrderDetail = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderDetail'));
 const PickupOrderUpload = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderUpload'));
 
 // Users
@@ -22,6 +22,7 @@ const UserForm = lazy(() => import('../../modules/users/pages/UserForm'));
 // Clients
 const ClientList = lazy(() => import('../../modules/clients/pages/ClientList'));
 const ClientForm = lazy(() => import('../../modules/clients/pages/ClientForm'));
+const ClientDetail = lazy(() => import('../../modules/clients/pages/ClientDetail'));
 
 // Basins
 const BasinList = lazy(() => import('../../modules/basins/pages/BasinList'));
@@ -48,27 +49,28 @@ const AppRoutes = () => {
         <Route path="/pickup-orders" element={<ProtectedRoute><PickupOrderList /></ProtectedRoute>} />
         <Route path="/pickup-orders/new" element={<ProtectedRoute><PickupOrderForm /></ProtectedRoute>} />
         <Route path="/pickup-orders/upload" element={<ProtectedRoute><PickupOrderUpload /></ProtectedRoute>} />
-        
-        {/* DETTAGLI: /pickup-orders/:id */}
         <Route path="/pickup-orders/:id" element={<ProtectedRoute><PickupOrderDetail /></ProtectedRoute>} />
-        
-        {/* MODIFICA: /pickup-orders/:id/edit */}
-        <Route path="/pickup-orders/:id/edit" element={<ProtectedRoute><PickupOrderForm /></ProtectedRoute>} />
+        <Route path="/pickup-orders/edit/:id" element={<ProtectedRoute><PickupOrderForm /></ProtectedRoute>} />
         
         {/* Users Routes */}
         <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
         <Route path="/users/new" element={<ProtectedRoute><UserForm /></ProtectedRoute>} />
-        <Route path="/users/:id/edit" element={<ProtectedRoute><UserForm /></ProtectedRoute>} />
+        <Route path="/users/edit/:id" element={<ProtectedRoute><UserForm /></ProtectedRoute>} />
         
         {/* Clients Routes */}
         <Route path="/clients" element={<ProtectedRoute><ClientList /></ProtectedRoute>} />
         <Route path="/clients/new" element={<ProtectedRoute><ClientForm /></ProtectedRoute>} />
-        <Route path="/clients/:id/edit" element={<ProtectedRoute><ClientForm /></ProtectedRoute>} />
+        
+        {/* CORRETTO: Route per modifica cliente */}
+        <Route path="/clients/edit/:id" element={<ProtectedRoute><ClientForm /></ProtectedRoute>} />
+        
+        {/* Route per dettaglio cliente (DEVE essere dopo la route di modifica) */}
+        <Route path="/clients/:id" element={<ProtectedRoute><ClientDetail /></ProtectedRoute>} />
         
         {/* Basins Routes */}
         <Route path="/basins" element={<ProtectedRoute><BasinList /></ProtectedRoute>} />
         <Route path="/basins/new" element={<ProtectedRoute><BasinForm /></ProtectedRoute>} />
-        <Route path="/basins/:id/edit" element={<ProtectedRoute><BasinForm /></ProtectedRoute>} />
+        <Route path="/basins/edit/:id" element={<ProtectedRoute><BasinForm /></ProtectedRoute>} />
         
         {/* Placeholder routes for future modules */}
         <Route path="/deliveries" element={<ProtectedRoute><div>Conferimenti - Coming Soon</div></ProtectedRoute>} />

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -19,6 +20,8 @@ import {
   MenuItem,
   Fab,
   Grid,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import {
   Add,
@@ -32,65 +35,61 @@ import {
   Visibility,
   FilterList,
 } from '@mui/icons-material';
-
-// Mock data per i clienti
-const mockClients = [
-  {
-    id: '1',
-    name: 'Azienda Example Srl',
-    vatNumber: 'IT12345678901',
-    city: 'Milano',
-    email: 'info@example.it',
-    phone: '+39 02 1234567',
-    bacins: 3,
-    status: 'Attivo',
-  },
-  {
-    id: '2',
-    name: 'Consorzio Verde SpA',
-    vatNumber: 'IT98765432109',
-    city: 'Roma',
-    email: 'amministrazione@verde.it',
-    phone: '+39 06 9876543',
-    bacins: 5,
-    status: 'Attivo',
-  },
-  {
-    id: '3',
-    name: 'Eco Solutions Srl',
-    vatNumber: 'IT11223344556',
-    city: 'Napoli',
-    email: 'contact@ecosolutions.it',
-    phone: '+39 081 5555555',
-    bacins: 2,
-    status: 'Sospeso',
-  },
-  {
-    id: '4',
-    name: 'Green Tech Italia SpA',
-    vatNumber: 'IT77889900112',
-    city: 'Torino',
-    email: 'info@greentech.it',
-    phone: '+39 011 2233445',
-    bacins: 7,
-    status: 'Attivo',
-  },
-  {
-    id: '5',
-    name: 'Ricicla Bene Srl',
-    vatNumber: 'IT33445566778',
-    city: 'Firenze',
-    email: 'contatti@ricicla.it',
-    phone: '+39 055 7788990',
-    bacins: 4,
-    status: 'Attivo',
-  },
-];
+import * as clientService from '../services/clientService';
+import type { Client } from '../services/clientService';
 
 const ClientList = () => {
+  const navigate = useNavigate();
+  const [clients, setClients] = useState<Client[]>([]);
+  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
+
+  // Carica i clienti all'avvio
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await clientService.getClients();
+        setClients(data);
+        setFilteredClients(data);
+      } catch (error: any) {
+        console.error('Error fetching clients:', error);
+        
+        if (error.response?.status === 404) {
+          setError('Endpoint clienti non trovato. Verifica che il server sia avviato.');
+        } else if (error.response?.status === 500) {
+          setError('Errore del server. Verifica che il database sia configurato correttamente.');
+        } else if (error.code === 'ERR_NETWORK') {
+          setError('Impossibile connettersi al server. Verifica che il backend sia in esecuzione.');
+        } else {
+          setError(error.response?.data?.message || 'Errore nel caricamento dei clienti');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClients();
+  }, []);
+
+  // Filtro locale per la ricerca
+  useEffect(() => {
+    if (searchTerm === '') {
+      setFilteredClients(clients);
+    } else {
+      const filtered = clients.filter(client =>
+        client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.vatNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (client.city && client.city.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+      setFilteredClients(filtered);
+    }
+  }, [searchTerm, clients]);
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>, clientId: string) => {
     setAnchorEl(event.currentTarget);
@@ -102,24 +101,60 @@ const ClientList = () => {
     setSelectedClient(null);
   };
 
-  const filteredClients = mockClients.filter(client =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.vatNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.city.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Funzioni di navigazione
+  const handleViewClient = (clientId: string) => {
+    navigate(`/clients/${clientId}`);
+  };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Attivo':
-        return 'success';
-      case 'Sospeso':
-        return 'warning';
-      case 'Inattivo':
-        return 'error';
-      default:
-        return 'default';
+  const handleEditClient = (clientId: string) => {
+    navigate(`/clients/edit/${clientId}`);
+  };
+
+  const handleNewClient = () => {
+    navigate('/clients/new');
+  };
+
+  const handleDeleteClient = async (clientId: string) => {
+    if (window.confirm('Sei sicuro di voler eliminare questo cliente?')) {
+      try {
+        await clientService.deleteClient(clientId);
+        // Rimuovi il cliente dalla lista locale
+        const updatedClients = clients.filter(client => client.id !== clientId);
+        setClients(updatedClients);
+        setFilteredClients(updatedClients.filter(client =>
+          searchTerm === '' ||
+          client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          client.vatNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (client.city && client.city.toLowerCase().includes(searchTerm.toLowerCase()))
+        ));
+      } catch (error: any) {
+        console.error('Error deleting client:', error);
+        alert(error.response?.data?.message || 'Errore durante l\'eliminazione del cliente');
+      }
     }
   };
+
+  const getStatusColor = (basinsCount: number) => {
+    if (basinsCount === 0) return 'warning';
+    if (basinsCount >= 5) return 'success';
+    return 'info';
+  };
+
+  const getStatusLabel = (basinsCount: number) => {
+    if (basinsCount === 0) return 'Nessun Bacino';
+    if (basinsCount >= 5) return 'Molto Attivo';
+    return 'Attivo';
+  };
+
+  if (loading) {
+    return (
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+          <CircularProgress />
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -138,6 +173,7 @@ const ClientList = () => {
             variant="contained"
             startIcon={<Add />}
             size="large"
+            onClick={handleNewClient}
             sx={{ 
               minWidth: 160,
               height: 48,
@@ -185,12 +221,14 @@ const ClientList = () => {
         </Box>
       </Box>
 
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
       {/* Statistics Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <Paper sx={{ p: 3, borderRadius: 3, textAlign: 'center' }}>
             <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
-              {mockClients.length}
+              {clients.length}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Clienti Totali
@@ -200,27 +238,27 @@ const ClientList = () => {
         <Grid item xs={12} sm={6} md={3}>
           <Paper sx={{ p: 3, borderRadius: 3, textAlign: 'center' }}>
             <Typography variant="h4" sx={{ fontWeight: 600, color: 'success.main' }}>
-              {mockClients.filter(c => c.status === 'Attivo').length}
+              {clients.filter(c => c.basins && c.basins.length > 0).length}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Clienti Attivi
+              Clienti con Bacini
             </Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <Paper sx={{ p: 3, borderRadius: 3, textAlign: 'center' }}>
             <Typography variant="h4" sx={{ fontWeight: 600, color: 'warning.main' }}>
-              {mockClients.filter(c => c.status === 'Sospeso').length}
+              {clients.filter(c => !c.basins || c.basins.length === 0).length}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Clienti Sospesi
+              Clienti senza Bacini
             </Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <Paper sx={{ p: 3, borderRadius: 3, textAlign: 'center' }}>
             <Typography variant="h4" sx={{ fontWeight: 600, color: 'info.main' }}>
-              {mockClients.reduce((sum, client) => sum + client.bacins, 0)}
+              {clients.reduce((sum, client) => sum + (client.basins?.length || 0), 0)}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Bacini Totali
@@ -260,6 +298,7 @@ const ClientList = () => {
                         <Button
                           variant="contained"
                           startIcon={<Add />}
+                          onClick={handleNewClient}
                           sx={{ mt: 2 }}
                         >
                           Aggiungi Cliente
@@ -305,7 +344,7 @@ const ClientList = () => {
                             {client.name}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            ID: {client.id}
+                            ID: {client.id.slice(0, 8)}...
                           </Typography>
                         </Box>
                       </Box>
@@ -330,29 +369,38 @@ const ClientList = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Business sx={{ fontSize: 18, color: 'text.secondary' }} />
                         <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                          {client.city}
+                          {client.city || 'N/A'}
                         </Typography>
                       </Box>
                     </TableCell>
                     <TableCell sx={{ py: 3 }}>
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Email sx={{ fontSize: 16, color: 'primary.main' }} />
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {client.email}
+                        {client.email && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Email sx={{ fontSize: 16, color: 'primary.main' }} />
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {client.email}
+                            </Typography>
+                          </Box>
+                        )}
+                        {client.phone && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Phone sx={{ fontSize: 16, color: 'success.main' }} />
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {client.phone}
+                            </Typography>
+                          </Box>
+                        )}
+                        {!client.email && !client.phone && (
+                          <Typography variant="body2" color="text.secondary">
+                            Nessun contatto
                           </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Phone sx={{ fontSize: 16, color: 'success.main' }} />
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {client.phone}
-                          </Typography>
-                        </Box>
+                        )}
                       </Box>
                     </TableCell>
                     <TableCell sx={{ py: 3 }}>
                       <Chip
-                        label={`${client.bacins} bacini`}
+                        label={`${client.basins?.length || 0} bacini`}
                         size="medium"
                         variant="outlined"
                         sx={{ 
@@ -368,9 +416,9 @@ const ClientList = () => {
                     </TableCell>
                     <TableCell sx={{ py: 3 }}>
                       <Chip
-                        label={client.status}
+                        label={getStatusLabel(client.basins?.length || 0)}
                         size="medium"
-                        color={getStatusColor(client.status) as any}
+                        color={getStatusColor(client.basins?.length || 0) as any}
                         sx={{ 
                           borderRadius: 3,
                           fontWeight: 600,
@@ -384,6 +432,8 @@ const ClientList = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <IconButton 
                           size="small" 
+                          onClick={() => handleViewClient(client.id)}
+                          title="Visualizza Dettagli"
                           sx={{ 
                             borderRadius: 3,
                             backgroundColor: 'primary.main',
@@ -399,6 +449,8 @@ const ClientList = () => {
                         </IconButton>
                         <IconButton 
                           size="small"
+                          onClick={() => handleEditClient(client.id)}
+                          title="Modifica Cliente"
                           sx={{ 
                             borderRadius: 3,
                             backgroundColor: 'success.main',
@@ -415,6 +467,7 @@ const ClientList = () => {
                         <IconButton
                           size="small"
                           onClick={(e) => handleMenuClick(e, client.id)}
+                          title="Altre Azioni"
                           sx={{ 
                             borderRadius: 3,
                             backgroundColor: 'grey.300',
@@ -458,7 +511,7 @@ const ClientList = () => {
         <MenuItem 
           onClick={() => {
             handleMenuClose();
-            console.log('Visualizza cliente:', selectedClient);
+            if (selectedClient) handleViewClient(selectedClient);
           }} 
           sx={{ 
             gap: 2, 
@@ -472,7 +525,7 @@ const ClientList = () => {
         <MenuItem 
           onClick={() => {
             handleMenuClose();
-            console.log('Modifica cliente:', selectedClient);
+            if (selectedClient) handleEditClient(selectedClient);
           }} 
           sx={{ 
             gap: 2, 
@@ -486,7 +539,7 @@ const ClientList = () => {
         <MenuItem 
           onClick={() => {
             handleMenuClose();
-            console.log('Elimina cliente:', selectedClient);
+            if (selectedClient) handleDeleteClient(selectedClient);
           }} 
           sx={{ 
             gap: 2, 
@@ -504,6 +557,7 @@ const ClientList = () => {
       <Fab
         color="primary"
         aria-label="add"
+        onClick={handleNewClient}
         sx={{
           position: 'fixed',
           bottom: 24,

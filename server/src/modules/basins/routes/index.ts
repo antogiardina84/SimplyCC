@@ -1,7 +1,7 @@
 // server/src/modules/basins/routes/index.ts
 
 import { Router } from 'express';
-import { authMiddleware } from '../../../core/middleware/auth.middleware';
+import { authMiddleware, checkRole } from '../../../core/middleware/auth.middleware';
 import * as basinController from '../controllers/index';
 
 const router = Router();
@@ -9,15 +9,25 @@ const router = Router();
 // Proteggi tutte le route con autenticazione
 router.use(authMiddleware);
 
-// Routes CRUD principali
+// Route pubbliche (per tutti gli utenti autenticati)
 router.get('/', basinController.getAllBasins);
-router.get('/stats', basinController.getBasinStats);
+router.get('/stats', checkRole(['ADMIN', 'MANAGER']), basinController.getBasinStats);
 router.get('/search', basinController.searchBasinsByCode);
-router.get('/check-code', basinController.checkBasinCodeAvailability);
+
+// Route per controllo disponibilità codice
+router.get('/check-code/:code', basinController.checkBasinCodeAvailability);
+
+// Route per ottenere bacini per cliente - QUESTA ERA MANCANTE!
 router.get('/client/:clientId', basinController.getBasinsByClient);
+
+// Route specifica per ID (deve essere dopo le route con path fissi)
 router.get('/:id', basinController.getBasinById);
-router.post('/', basinController.createBasin);
-router.put('/:id', basinController.updateBasin);
-router.delete('/:id', basinController.deleteBasin);
+
+// Route amministrative (solo per manager e admin)
+router.post('/', checkRole(['ADMIN', 'MANAGER']), basinController.createBasin);
+router.put('/:id', checkRole(['ADMIN', 'MANAGER']), basinController.updateBasin);
+
+// Route eliminazione (solo admin)
+router.delete('/:id', checkRole(['ADMIN']), basinController.deleteBasin);
 
 export { router as basinRoutes };

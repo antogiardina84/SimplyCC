@@ -44,25 +44,35 @@ const ClientDetail = () => {
         
         // Fetch related data in parallel
         const [basinsData, ordersData] = await Promise.all([
-          basinService.getBasinsByClientId(id),
+          basinService.getBasinsByClient(id),
           pickupOrderService.getPickupOrdersByClient(id)
         ]);
         
         setBasins(basinsData);
         setRecentOrders(ordersData.slice(0, 5)); // Ultimi 5 ordini
         
-        // Calculate stats
+        // Calculate stats con tipizzazione corretta
         setStats({
           totalBasins: basinsData.length,
           totalOrders: ordersData.length,
-          pendingOrders: ordersData.filter(order => order.status === 'PENDING').length,
-          completedOrders: ordersData.filter(order => order.status === 'COMPLETED').length
+          pendingOrders: ordersData.filter((order: PickupOrder) => order.status === 'PENDING').length,
+          completedOrders: ordersData.filter((order: PickupOrder) => order.status === 'COMPLETED').length
         });
         
         setError(null);
       } catch (error: any) {
         console.error('Error fetching client data:', error);
-        setError(error.response?.data?.message || 'Errore nel caricamento dei dati cliente');
+        
+        // Gestione più specifica degli errori
+        if (error.response?.status === 404) {
+          setError('Cliente non trovato. Verifica che l\'ID sia corretto.');
+        } else if (error.response?.status === 500) {
+          setError('Errore del server. Riprova più tardi.');
+        } else if (error.code === 'ERR_NETWORK') {
+          setError('Impossibile connettersi al server. Verifica che il backend sia in esecuzione.');
+        } else {
+          setError(error.response?.data?.message || 'Errore nel caricamento dei dati cliente');
+        }
       } finally {
         setLoading(false);
       }
@@ -83,17 +93,17 @@ const ClientDetail = () => {
     navigate(`/pickup-orders/${orderId}`);
   };
 
-  const getFlowTypeLabel = (flowType: string) => {
+  const getFlowTypeLabel = (flowType: string): string => {
     switch (flowType) {
-      case 'A': return 'Flusso A';
-      case 'B': return 'Flusso B';
-      case 'C': return 'Flusso C';
-      case 'D': return 'Flusso D';
+      case 'A': return 'Flusso A - Monomateriale urbano';
+      case 'B': return 'Flusso B - Monomateriale non domestico';
+      case 'C': return 'Flusso C - Monomateriale urbano CPL';
+      case 'D': return 'Flusso D - Multimateriale urbano';
       default: return flowType;
     }
   };
 
-  const getFlowTypeColor = (flowType: string) => {
+  const getFlowTypeColor = (flowType: string): 'primary' | 'secondary' | 'success' | 'warning' | 'default' => {
     switch (flowType) {
       case 'A': return 'primary';
       case 'B': return 'secondary';
@@ -103,7 +113,7 @@ const ClientDetail = () => {
     }
   };
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string): string => {
     switch (status) {
       case 'PENDING': return 'In Attesa';
       case 'SCHEDULED': return 'Programmato';
@@ -114,7 +124,7 @@ const ClientDetail = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): 'warning' | 'info' | 'primary' | 'success' | 'error' | 'default' => {
     switch (status) {
       case 'PENDING': return 'warning';
       case 'SCHEDULED': return 'info';
@@ -131,6 +141,22 @@ const ClientDetail = () => {
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
           <CircularProgress />
         </Box>
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Button 
+          variant="outlined" 
+          startIcon={<ArrowBack />} 
+          onClick={() => navigate('/clients')}
+          sx={{ mb: 3 }}
+        >
+          Torna ai Clienti
+        </Button>
+        <Alert severity="error">{error}</Alert>
       </Container>
     );
   }
@@ -171,8 +197,6 @@ const ClientDetail = () => {
           Modifica Cliente
         </Button>
       </Box>
-      
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
       
       {/* Statistics Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -389,7 +413,7 @@ const ClientDetail = () => {
                       <Chip
                         label={getFlowTypeLabel(basin.flowType)}
                         size="small"
-                        color={getFlowTypeColor(basin.flowType) as any}
+                        color={getFlowTypeColor(basin.flowType)}
                         sx={{ mt: 0.5 }}
                       />
                     </Box>
@@ -461,7 +485,7 @@ const ClientDetail = () => {
                           <Chip
                             label={getStatusLabel(order.status)}
                             size="small"
-                            color={getStatusColor(order.status) as any}
+                            color={getStatusColor(order.status)}
                           />
                         </TableCell>
                         <TableCell>

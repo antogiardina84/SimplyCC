@@ -103,11 +103,15 @@ export const searchClients = async (query: string): Promise<Client[]> => {
  * Verifica se una partita IVA è disponibile
  */
 export const checkVatNumberAvailability = async (vatNumber: string, excludeId?: string): Promise<boolean> => {
-  const params = new URLSearchParams({ vatNumber });
+  const params = new URLSearchParams();
   if (excludeId) {
     params.append('excludeId', excludeId);
   }
   
-  const response = await api.get(`/clients/check-vat?${params}`);
+  const url = params.toString() 
+    ? `/clients/check-vat/${vatNumber}?${params}` 
+    : `/clients/check-vat/${vatNumber}`;
+  
+  const response = await api.get(url);
   return response.data.available;
 };

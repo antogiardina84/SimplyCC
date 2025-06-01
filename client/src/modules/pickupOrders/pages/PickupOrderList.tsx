@@ -112,7 +112,7 @@ const PickupOrderList = () => {
         <Button
           variant="contained"
           startIcon={<Add />}
-          onClick={() => navigate('/pickup-orders/new')}
+          onClick={() => navigate('/pickup-orders/upload')}
         >
           Nuovo Buono di Ritiro
         </Button>
