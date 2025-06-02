@@ -1,12 +1,13 @@
 // server/src/modules/pickupOrders/controllers/ocrLogistics.controller.ts
 
 import { Request, Response, NextFunction } from 'express';
-import * as logisticsService from '../../shipments/services/logistics.service';
+import * as logisticsService from '../../shipments/services/logistics.service'; // Assicurati che questo sia il percorso corretto per il tuo servizio logistico
 
 export interface LogisticMatchingRequest {
   senderName?: string;
   recipientName?: string;
   transporterName?: string;
+  shipperName?: string; // Aggiunto shipperName
 }
 
 export interface LogisticMatchingResponse {
@@ -31,6 +32,13 @@ export interface LogisticMatchingResponse {
     similarity: number;
     isExactMatch: boolean;
   }>;
+  shipperSuggestions: Array<{ // Aggiunto shipperSuggestions
+    id: string;
+    name: string;
+    city?: string;
+    similarity: number;
+    isExactMatch: boolean;
+  }>;
   confidence: number;
   needsReview: boolean;
 }
@@ -40,12 +48,12 @@ export interface LogisticMatchingResponse {
  */
 const calculateSimilarity = (str1: string, str2: string): number => {
   if (!str1 || !str2) return 0;
-  
+
   const longer = str1.length > str2.length ? str1 : str2;
   const shorter = str1.length > str2.length ? str2 : str1;
-  
+
   if (longer.length === 0) return 1.0;
-  
+
   const distance = levenshteinDistance(longer.toLowerCase(), shorter.toLowerCase());
   return (longer.length - distance) / longer.length;
 };
@@ -55,15 +63,15 @@ const calculateSimilarity = (str1: string, str2: string): number => {
  */
 const levenshteinDistance = (str1: string, str2: string): number => {
   const matrix = [];
-  
+
   for (let i = 0; i <= str2.length; i++) {
     matrix[i] = [i];
   }
-  
+
   for (let j = 0; j <= str1.length; j++) {
     matrix[0][j] = j;
   }
-  
+
   for (let i = 1; i <= str2.length; i++) {
     for (let j = 1; j <= str1.length; j++) {
       if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
@@ -77,30 +85,30 @@ const levenshteinDistance = (str1: string, str2: string): number => {
       }
     }
   }
-  
+
   return matrix[str2.length][str1.length];
 };
 
 /**
  * Trova suggerimenti per un'entità logistica specifica
  */
-const findLogisticSuggestions = async (searchTerm: string, entityType: 'SENDER' | 'RECIPIENT' | 'TRANSPORTER') => {
+const findLogisticSuggestions = async (searchTerm: string, entityType: 'SENDER' | 'RECIPIENT' | 'TRANSPORTER' | 'SHIPPER') => {
   if (!searchTerm || searchTerm.length < 3) {
     return [];
   }
 
   // Ottieni tutte le entità del tipo richiesto
   const entities = await logisticsService.findLogisticEntitiesByType(entityType);
-  
+
   // Calcola similarità per ciascuna entità
   const suggestions = entities.map(entity => {
     const nameSimilarity = calculateSimilarity(searchTerm, entity.name);
     const citySimilarity = entity.city ? calculateSimilarity(searchTerm, entity.city) : 0;
     const contactSimilarity = entity.contactPerson ? calculateSimilarity(searchTerm, entity.contactPerson) : 0;
-    
+
     // Prendi la similarità migliore
     const similarity = Math.max(nameSimilarity, citySimilarity, contactSimilarity);
-    
+
     return {
       id: entity.id,
       name: entity.name,
@@ -122,19 +130,20 @@ const findLogisticSuggestions = async (searchTerm: string, entityType: 'SENDER' 
  */
 export const getLogisticSuggestions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { senderName, recipientName, transporterName } = req.body as LogisticMatchingRequest;
-    
+    const { senderName, recipientName, transporterName, shipperName } = req.body as LogisticMatchingRequest; // Aggiunto shipperName
+
     // Cerca suggerimenti per ciascun tipo di entità
-    const [senderSuggestions, recipientSuggestions, transporterSuggestions] = await Promise.all([
+    const [senderSuggestions, recipientSuggestions, transporterSuggestions, shipperSuggestions] = await Promise.all([
       senderName ? findLogisticSuggestions(senderName, 'SENDER') : [],
       recipientName ? findLogisticSuggestions(recipientName, 'RECIPIENT') : [],
       transporterName ? findLogisticSuggestions(transporterName, 'TRANSPORTER') : [],
+      shipperName ? findLogisticSuggestions(shipperName, 'SHIPPER') : [], // Aggiunto shipperName
     ]);
 
     // Calcola confidenza complessiva
-    const allSuggestions = [...senderSuggestions, ...recipientSuggestions, ...transporterSuggestions];
-    const avgSimilarity = allSuggestions.length > 0 
-      ? allSuggestions.reduce((sum, s) => sum + s.similarity, 0) / allSuggestions.length 
+    const allSuggestions = [...senderSuggestions, ...recipientSuggestions, ...transporterSuggestions, ...shipperSuggestions]; // Includi shipperSuggestions
+    const avgSimilarity = allSuggestions.length > 0
+      ? allSuggestions.reduce((sum, s) => sum + s.similarity, 0) / allSuggestions.length
       : 0;
 
     const confidence = Math.round(avgSimilarity * 100);
@@ -144,6 +153,7 @@ export const getLogisticSuggestions = async (req: Request, res: Response, next: 
       senderSuggestions,
       recipientSuggestions,
       transporterSuggestions,
+      shipperSuggestions, // Includi shipperSuggestions
       confidence,
       needsReview,
     };
@@ -183,11 +193,15 @@ export const createLogisticEntitiesFromOCR = async (req: Request, res: Response,
       recipientCity,
       recipientEmail,
       recipientPhone,
+      transporterName, // Aggiunto transporterName
+      shipperName,     // Aggiunto shipperName
     } = req.body;
 
-    const createdEntities: { 
-      sender?: CreatedEntity; 
-      recipient?: CreatedEntity; 
+    const createdEntities: {
+      sender?: CreatedEntity;
+      recipient?: CreatedEntity;
+      transporter?: CreatedEntity; // Aggiunto transporter
+      shipper?: CreatedEntity;     // Aggiunto shipper
     } = {};
 
     // Crea mittente se non esiste
@@ -230,6 +244,44 @@ export const createLogisticEntitiesFromOCR = async (req: Request, res: Response,
         const existing = await logisticsService.searchLogisticEntitiesForOCR(recipientName, 'RECIPIENT');
         if (existing.length > 0) {
           createdEntities.recipient = existing[0];
+        }
+      }
+    }
+
+    // Crea trasportatore se non esiste
+    if (transporterName) {
+      try {
+        const newTransporter = await logisticsService.createLogisticEntity({
+          name: transporterName,
+          entityType: 'TRANSPORTER', // Specifica il tipo di entità
+          notes: 'Creato automaticamente da OCR (Trasportatore)',
+          // Aggiungi qui altri campi specifici del trasportatore se disponibili nel req.body
+        });
+        createdEntities.transporter = newTransporter;
+      } catch (error) {
+        // Se esiste già, cerca quello esistente
+        const existing = await logisticsService.searchLogisticEntitiesForOCR(transporterName, 'TRANSPORTER');
+        if (existing.length > 0) {
+          createdEntities.transporter = existing[0];
+        }
+      }
+    }
+
+    // Crea shipper se non esiste
+    if (shipperName) {
+      try {
+        const newShipper = await logisticsService.createLogisticEntity({
+          name: shipperName,
+          entityType: 'SHIPPER', // Specifica il tipo di entità
+          notes: 'Creato automaticamente da OCR (Shipper)',
+          // Aggiungi qui altri campi specifici dello shipper se disponibili nel req.body
+        });
+        createdEntities.shipper = newShipper;
+      } catch (error) {
+        // Se esiste già, cerca quello esistente
+        const existing = await logisticsService.searchLogisticEntitiesForOCR(shipperName, 'SHIPPER');
+        if (existing.length > 0) {
+          createdEntities.shipper = existing[0];
         }
       }
     }

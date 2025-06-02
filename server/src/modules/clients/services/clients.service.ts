@@ -41,11 +41,12 @@ export const findAllClients = async () => {
           flowType: true,
         },
       },
+      // Contiamo gli ordini dove questo Client è il 'client' della PickupOrder
       _count: {
         select: {
           basins: true,
-          sentOrders: true,
-          receivedOrders: true,
+          pickupOrdersAsClient: true, // Corretto: usa la relazione definita in Client
+          deliveries: true, // Aggiunto il conteggio delle deliveries se necessario
         },
       },
     },
@@ -63,7 +64,7 @@ export const findClientById = async (id: string) => {
         include: {
           _count: {
             select: {
-              pickupOrders: true,
+              pickupOrders: true, // Bacini contano i loro pickupOrders
             },
           },
         },
@@ -71,7 +72,8 @@ export const findClientById = async (id: string) => {
           code: 'asc',
         },
       },
-      sentOrders: {
+      // Includi gli ordini di ritiro dove questo Client è il 'client'
+      pickupOrdersAsClient: { // Corretto: usa la relazione definita in Client
         select: {
           id: true,
           orderNumber: true,
@@ -89,29 +91,23 @@ export const findClientById = async (id: string) => {
         },
         take: 10, // Solo gli ultimi 10 ordini
       },
-      receivedOrders: {
+      deliveries: { // Se vuoi includere anche le consegne recenti
         select: {
           id: true,
-          orderNumber: true,
-          issueDate: true,
-          status: true,
-          expectedQuantity: true,
-          basin: {
-            select: {
-              code: true,
-            },
-          },
+          date: true,
+          materialType: true,
+          weight: true,
         },
         orderBy: {
-          issueDate: 'desc',
+          date: 'desc',
         },
-        take: 10, // Solo gli ultimi 10 ordini
+        take: 10,
       },
       _count: {
         select: {
           basins: true,
-          sentOrders: true,
-          receivedOrders: true,
+          pickupOrdersAsClient: true, // Corretto
+          deliveries: true, // Aggiunto il conteggio delle deliveries
         },
       },
     },
@@ -135,6 +131,7 @@ export const findClientByVatNumber = async (vatNumber: string) => {
           flowType: true,
         },
       },
+      // Qui non avevi _count, ma se lo aggiungi, usa pickupOrdersAsClient
     },
   });
 };
@@ -174,8 +171,8 @@ export const searchClients = async (searchTerm: string) => {
       _count: {
         select: {
           basins: true,
-          sentOrders: true,
-          receivedOrders: true,
+          pickupOrdersAsClient: true, // Corretto
+          deliveries: true, // Aggiunto
         },
       },
     },
@@ -210,8 +207,8 @@ export const createClient = async (clientData: CreateClientData) => {
         _count: {
           select: {
             basins: true,
-            sentOrders: true,
-            receivedOrders: true,
+            pickupOrdersAsClient: true, // Corretto
+            deliveries: true, // Aggiunto
           },
         },
       },
@@ -258,8 +255,8 @@ export const updateClient = async (id: string, clientData: UpdateClientData) => 
       _count: {
         select: {
           basins: true,
-          sentOrders: true,
-          receivedOrders: true,
+          pickupOrdersAsClient: true, // Corretto
+          deliveries: true, // Aggiunto
         },
       },
     },
@@ -271,8 +268,8 @@ export const deleteClient = async (id: string) => {
     where: { id },
     include: {
       basins: true,
-      sentOrders: true,
-      receivedOrders: true,
+      pickupOrdersAsClient: true, // Corretto: verifica gli ordini dove questo client è il 'client'
+      deliveries: true, // Se vuoi verificare anche le consegne
     },
   });
 
@@ -285,9 +282,9 @@ export const deleteClient = async (id: string) => {
     throw new HttpException(400, 'Impossibile eliminare il cliente: rimuovere prima tutti i bacini associati');
   }
 
-  // Verifico se il cliente ha ordini associati
-  if (client.sentOrders.length > 0 || client.receivedOrders.length > 0) {
-    throw new HttpException(400, 'Impossibile eliminare il cliente: ha ordini associati');
+  // Verifico se il cliente ha ordini di ritiro o consegne associati
+  if (client.pickupOrdersAsClient.length > 0 || client.deliveries.length > 0) {
+    throw new HttpException(400, 'Impossibile eliminare il cliente: ha ordini o consegne associati');
   }
 
   return prisma.client.delete({
@@ -299,14 +296,14 @@ export const getClientStats = async () => {
   const [
     totalClients,
     clientsWithBasins,
-    clientsWithOrders,
+    clientsWithOrders, // Questo conteggio è più complesso per via delle relazioni
     recentClients,
     topClientsByBasins,
     topClientsByOrders
   ] = await Promise.all([
     // Totale clienti
     prisma.client.count(),
-    
+
     // Clienti con bacini
     prisma.client.count({
       where: {
@@ -315,13 +312,13 @@ export const getClientStats = async () => {
         },
       },
     }),
-    
-    // Clienti con ordini nell'ultimo mese
+
+    // Clienti con ordini (pickupOrdersAsClient) o consegne (deliveries) nell'ultimo mese
     prisma.client.count({
       where: {
         OR: [
           {
-            sentOrders: {
+            pickupOrdersAsClient: { // Corretto
               some: {
                 issueDate: {
                   gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
@@ -330,9 +327,9 @@ export const getClientStats = async () => {
             },
           },
           {
-            receivedOrders: {
+            deliveries: { // Controlla anche le consegne
               some: {
-                issueDate: {
+                date: {
                   gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
                 },
               },
@@ -341,7 +338,7 @@ export const getClientStats = async () => {
         ],
       },
     }),
-    
+
     // Clienti creati di recente
     prisma.client.findMany({
       where: {
@@ -360,7 +357,7 @@ export const getClientStats = async () => {
       },
       take: 5,
     }),
-    
+
     // Top clienti per numero di bacini
     prisma.client.findMany({
       select: {
@@ -380,8 +377,8 @@ export const getClientStats = async () => {
       },
       take: 5,
     }),
-    
-    // Top clienti per numero di ordini
+
+    // Top clienti per numero di ordini (pickupOrdersAsClient)
     prisma.client.findMany({
       select: {
         id: true,
@@ -389,22 +386,23 @@ export const getClientStats = async () => {
         vatNumber: true,
         _count: {
           select: {
-            sentOrders: true,
-            receivedOrders: true,
+            pickupOrdersAsClient: true, // Corretto
+            deliveries: true, // Aggiunto il conteggio anche per le consegne
           },
         },
       },
       orderBy: [
         {
-          sentOrders: {
+          pickupOrdersAsClient: { // Corretto
             _count: 'desc',
           },
         },
         {
-          receivedOrders: {
+          // Aggiunto per ordinare anche per deliveries se presenti
+          deliveries: {
             _count: 'desc',
           },
-        },
+        }
       ],
       take: 5,
     }),

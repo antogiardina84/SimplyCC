@@ -1,13 +1,38 @@
-// client/src/modules/pickupOrders/pages/PickupOrderDetail.tsx
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Container, Typography, Paper, Box, Grid, Chip, Button, Alert, CircularProgress, Divider } from '@mui/material';
 import { Edit, ArrowBack } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
+
+// Assicurati che PickupOrder rifletta la struttura da ocrPickupOrderService.ts o dal tuo database
+// Come per PickupOrderList, assumiamo senderName e recipientName come stringhe dirette.
 import * as pickupOrderService from '../services/ocrPickupOrderService';
-import type { PickupOrder, PickupOrderStatus } from '../services/ocrPickupOrderService';
+
+// Definizione dell'interfaccia PickupOrder (copiata da PickupOrderList per coerenza)
+export interface PickupOrder {
+  id: string;
+  orderNumber: string;
+  issueDate: string; 
+  senderName: string; // Modificato da sender?.name
+  recipientName: string; // Modificato da recipient?.name
+  basinCode: string;
+  basinDescription?: string;
+  flowType?: string;
+  distanceKm?: number;
+  expectedQuantity?: number;
+  actualQuantity?: number;
+  destinationQuantity?: number;
+  notes?: string;
+  status: PickupOrderStatus;
+  scheduledDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  // Aggiungi qui altre proprietà se presenti nel tuo modello di database finale
+}
+
+export type PickupOrderStatus = 'PENDING' | 'SCHEDULED' | 'READY' | 'COMPLETED' | 'CANCELLED';
+
 
 const PickupOrderDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -136,31 +161,34 @@ const PickupOrderDetail = () => {
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle2" color="textSecondary">Mittente</Typography>
             <Typography variant="body1" sx={{ mb: 2 }}>
-              {pickupOrder.sender?.name || 'N/A'}
-              {pickupOrder.sender?.vatNumber && ` (${pickupOrder.sender.vatNumber})`}
+              {/* MODIFICA: Accedi direttamente a senderName */}
+              {pickupOrder.senderName || 'N/A'}
+              {/* Rimosso riferimento a vatNumber dato che sender non è un oggetto */}
             </Typography>
           </Grid>
 
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle2" color="textSecondary">Destinatario</Typography>
             <Typography variant="body1" sx={{ mb: 2 }}>
-              {pickupOrder.recipient?.name || 'N/A'}
-              {pickupOrder.recipient?.vatNumber && ` (${pickupOrder.recipient.vatNumber})`}
+              {/* MODIFICA: Accedi direttamente a recipientName */}
+              {pickupOrder.recipientName || 'N/A'}
+              {/* Rimosso riferimento a vatNumber dato che recipient non è un oggetto */}
             </Typography>
           </Grid>
 
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle2" color="textSecondary">Bacino</Typography>
             <Typography variant="body1" sx={{ mb: 2 }}>
-              {pickupOrder.basin?.code || 'N/A'}
-              {pickupOrder.basin?.description && ` - ${pickupOrder.basin.description}`}
+              {/* MODIFICA: Accedi direttamente a basinCode e basinDescription */}
+              {pickupOrder.basinCode || 'N/A'}
+              {pickupOrder.basinDescription && ` - ${pickupOrder.basinDescription}`}
             </Typography>
           </Grid>
 
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle2" color="textSecondary">Tipo Flusso</Typography>
             <Typography variant="body1" sx={{ mb: 2 }}>
-              Flusso {pickupOrder.flowType}
+              Flusso {pickupOrder.flowType || 'N/A'}
             </Typography>
           </Grid>
 

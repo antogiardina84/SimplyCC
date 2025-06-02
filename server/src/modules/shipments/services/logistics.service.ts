@@ -5,6 +5,9 @@ import { HttpException } from '../../../core/middleware/error.middleware';
 
 const prisma = new PrismaClient();
 
+// Estendi questo tipo per includere 'SHIPPER'
+export type LogisticEntityType = 'SENDER' | 'RECIPIENT' | 'TRANSPORTER' | 'SHIPPER';
+
 export interface CreateLogisticEntityData {
   name: string;
   address?: string;
@@ -15,7 +18,7 @@ export interface CreateLogisticEntityData {
   email?: string;
   contactPerson?: string;
   notes?: string;
-  entityType: 'SENDER' | 'RECIPIENT' | 'TRANSPORTER';
+  entityType: LogisticEntityType; // Usa il tipo esteso
 }
 
 export interface UpdateLogisticEntityData {
@@ -28,12 +31,12 @@ export interface UpdateLogisticEntityData {
   email?: string;
   contactPerson?: string;
   notes?: string;
-  entityType?: 'SENDER' | 'RECIPIENT' | 'TRANSPORTER';
+  entityType?: LogisticEntityType; // Usa il tipo esteso
   isActive?: boolean;
 }
 
 export interface LogisticEntityFilters {
-  entityType?: 'SENDER' | 'RECIPIENT' | 'TRANSPORTER';
+  entityType?: LogisticEntityType; // Usa il tipo esteso
   isActive?: boolean;
   search?: string;
 }
@@ -42,7 +45,7 @@ export interface LogisticEntityFilters {
  * Trova tutte le entità logistiche con filtri opzionali
  */
 interface WhereClause {
-  entityType?: 'SENDER' | 'RECIPIENT' | 'TRANSPORTER';
+  entityType?: LogisticEntityType; // Usa il tipo esteso
   isActive?: boolean;
   OR?: Array<{
     name?: { contains: string; mode: 'insensitive' };
@@ -82,7 +85,7 @@ export const findAllLogisticEntities = async (filters: LogisticEntityFilters = {
 /**
  * Trova entità logistiche per tipo specifico
  */
-export const findLogisticEntitiesByType = async (entityType: 'SENDER' | 'RECIPIENT' | 'TRANSPORTER') => {
+export const findLogisticEntitiesByType = async (entityType: LogisticEntityType) => { // Esteso a LogisticEntityType
   return prisma.logisticEntity.findMany({
     where: {
       entityType,
@@ -137,6 +140,19 @@ export const findLogisticEntityById = async (id: string) => {
         },
         take: 10,
       },
+      // Assicurati che il modello Prisma contenga `shippedOrders` se vuoi includerlo
+      // shippedOrders: {
+      //   select: {
+      //     id: true,
+      //     orderNumber: true,
+      //     status: true,
+      //     scheduledDate: true,
+      //   },
+      //   orderBy: {
+      //     createdAt: 'desc',
+      //   },
+      //   take: 10,
+      // },
     },
   });
 
@@ -226,6 +242,7 @@ export const deleteLogisticEntity = async (id: string) => {
       sentOrders: { where: { status: { not: 'COMPLETO' } } },
       receivedOrders: { where: { status: { not: 'COMPLETO' } } },
       transportedOrders: { where: { status: { not: 'COMPLETO' } } },
+      // shippedOrders: { where: { status: { not: 'COMPLETO' } } }, // Aggiungi se pertinente
     },
   });
 
@@ -238,6 +255,7 @@ export const deleteLogisticEntity = async (id: string) => {
     ...entity.sentOrders,
     ...entity.receivedOrders,
     ...entity.transportedOrders,
+    // ...(entity.shippedOrders || []), // Aggiungi se pertinente
   ];
 
   if (activeOrders.length > 0) {
@@ -276,7 +294,7 @@ export const reactivateLogisticEntity = async (id: string) => {
 /**
  * Cerca entità logistiche per matching OCR
  */
-export const searchLogisticEntitiesForOCR = async (searchTerm: string, entityType: 'SENDER' | 'RECIPIENT') => {
+export const searchLogisticEntitiesForOCR = async (searchTerm: string, entityType: LogisticEntityType) => { // Esteso a LogisticEntityType
   if (!searchTerm || searchTerm.length < 2) {
     return [];
   }
@@ -310,19 +328,19 @@ export const getLogisticEntityStats = async () => {
   ] = await Promise.all([
     // Totale entità
     prisma.logisticEntity.count(),
-    
+
     // Entità per tipo
     prisma.logisticEntity.groupBy({
       by: ['entityType'],
       _count: { id: true },
       where: { isActive: true },
     }),
-    
+
     // Entità attive
     prisma.logisticEntity.count({
       where: { isActive: true },
     }),
-    
+
     // Create negli ultimi 30 giorni
     prisma.logisticEntity.count({
       where: {

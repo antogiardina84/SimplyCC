@@ -2,10 +2,10 @@
 
 import api from '../../../core/services/api';
 import type { ExtractedPickupOrderData } from './pdfTextService';
-import { 
+import {
   createPickupOrderFromExtractedData,
   type CreationResult,
-  type MatchingResults 
+  type MatchingResults
 } from './pickupOrderCreationService';
 
 // ================================
@@ -24,6 +24,7 @@ export interface LogisticMatchingResponse {
   senderSuggestions: LogisticEntitySuggestion[];
   recipientSuggestions: LogisticEntitySuggestion[];
   transporterSuggestions: LogisticEntitySuggestion[];
+  shipperSuggestions?: LogisticEntitySuggestion[]; // AGGIUNTO: Aggiungi shipperSuggestions qui
   confidence: number;
   needsReview: boolean;
 }
@@ -34,7 +35,7 @@ export interface EnhancedMatchingResults extends MatchingResults {
 }
 
 export interface EnhancedCreationResult extends CreationResult {
-  // Manteniamo tutto quello esistente 
+  // Manteniamo tutto quello esistente
   matchingResults: EnhancedMatchingResults;
 }
 
@@ -53,18 +54,20 @@ export const getLogisticSuggestionsFromOCR = async (
     const response = await api.post('/pickup-orders/ocr/logistics/suggestions', {
       senderName: extractedData.senderName,
       recipientName: extractedData.recipientName,
-      transporterName: extractedData.transportType, // Se abbiamo il trasportatore
+      transporterName: (extractedData as any).transporter, // Assumendo che transporter sia in extractedData
+      shipperName: (extractedData as any).shipperName, // Assumendo che shipperName sia in extractedData
     });
 
     return response.data;
   } catch (error) {
     console.error('Errore nel recupero suggerimenti logistici:', error);
-    
+
     // Fallback: restituisce struttura vuota
     return {
       senderSuggestions: [],
       recipientSuggestions: [],
       transporterSuggestions: [],
+      shipperSuggestions: [], // Includi shipperSuggestions anche nel fallback
       confidence: 0,
       needsReview: true,
     };
@@ -77,19 +80,21 @@ export const getLogisticSuggestionsFromOCR = async (
  */
 export const autoCreateLogisticEntities = async (
   extractedData: ExtractedPickupOrderData
-): Promise<{ sender?: any; recipient?: any }> => {
+): Promise<{ sender?: any; recipient?: any; transporter?: any; shipper?: any; }> => { // Esteso il tipo di ritorno
   try {
     const response = await api.post('/pickup-orders/ocr/logistics/auto-create', {
       senderName: extractedData.senderName,
       senderAddress: extractedData.senderAddress,
       senderCity: extractedData.senderCity,
       senderEmail: extractedData.senderEmail,
-      senderPhone: extractedData.senderPhone,
+      senderPhone: (extractedData as any).senderPhone,
       recipientName: extractedData.recipientName,
       recipientAddress: extractedData.recipientAddress,
       recipientCity: extractedData.recipientCity,
       recipientEmail: extractedData.recipientEmail,
-      recipientPhone: extractedData.recipientPhone,
+      recipientPhone: (extractedData as any).recipientPhone,
+      transporterName: (extractedData as any).transporter, // Passa il nome del trasportatore
+      shipperName: (extractedData as any).shipperName, // Passa il nome dello shipper
     });
 
     return response.data.createdEntities;
@@ -119,7 +124,7 @@ export const createPickupOrderWithLogistics = async (
 
     // FASE 2: Se richiesto, aggiungi suggerimenti logistici
     let logisticSuggestions: LogisticMatchingResponse | undefined;
-    
+
     if (useLogisticSuggestions) {
       logisticSuggestions = await getLogisticSuggestionsFromOCR(extractedData);
     }
@@ -136,7 +141,7 @@ export const createPickupOrderWithLogistics = async (
     return enhancedResult;
   } catch (error: any) {
     console.error('Errore nella creazione enhanced del buono di ritiro:', error);
-    
+
     // Fallback: restituiamo il risultato della funzione originale
     const fallbackResult = await createPickupOrderFromExtractedData(
       extractedData,

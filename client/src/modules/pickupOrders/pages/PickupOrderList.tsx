@@ -1,5 +1,3 @@
-// client/src/modules/pickupOrders/pages/PickupOrderList.tsx
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Typography, Button, Paper, Table, TableBody, TableCell, TableContainer, 
@@ -7,8 +5,45 @@ import { Container, Typography, Button, Paper, Table, TableBody, TableCell, Tabl
 import { Add, Edit, Delete, Visibility } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
-import * as pickupOrderService from '../services/ocrPickupOrderService';
-import type { PickupOrder, PickupOrderStatus } from '../services/ocrPickupOrderService';
+
+// Assicurati che PickupOrder rifletta la struttura da ocrPickupOrderService.ts o dal tuo database
+// Se il tuo database salvasse 'senderName' e 'recipientName' direttamente, questa è la modifica corretta.
+// Se il tuo database salva 'sender' e 'recipient' come oggetti con 'name', allora la definizione di PickupOrder
+// deve riflettere questo, e il codice originale sarebbe stato corretto.
+// Per la consistenza con la tua ExtractedPickupOrderData, assumiamo che siano stringhe dirette.
+import * as pickupOrderService from '../services/ocrPickupOrderService'; // O il servizio che recupera i PickupOrder dal DB
+
+// Definizione dell'interfaccia PickupOrder basata sulla tua ExtractedPickupOrderData
+// e potenzialmente altri campi dal database.
+// Se PickupOrderService recupera i dati con sender/recipient come oggetti, questa interfaccia andrebbe aggiornata.
+// Per il contesto di questo problema, assumiamo che senderName e recipientName siano stringhe dirette.
+export interface PickupOrder {
+  id: string; // Assumiamo un ID per gli elementi della lista
+  orderNumber: string;
+  issueDate: string; // Le date dal server sono spesso stringhe ISO
+  senderName: string; // Modificato da sender?.name
+  recipientName: string; // Modificato da recipient?.name
+  basinCode: string; // Modificato da basin?.code
+  basinDescription?: string;
+  flowType?: string;
+  distanceKm?: number;
+  expectedQuantity?: number;
+  actualQuantity?: number;
+  destinationQuantity?: number;
+  notes?: string;
+  status: PickupOrderStatus;
+  scheduledDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  // Aggiungi qui altre proprietà se presenti nel tuo modello di database finale
+  // Esempio:
+  // sender: { id: string; name: string; vatNumber?: string; }; // Se il DB li gestisce come oggetti
+  // recipient: { id: string; name: string; vatNumber?: string; }; // Se il DB li gestisce come oggetti
+  // basin: { id: string; code: string; description?: string; }; // Se il DB li gestisce come oggetti
+}
+
+export type PickupOrderStatus = 'PENDING' | 'SCHEDULED' | 'READY' | 'COMPLETED' | 'CANCELLED';
+
 
 const PickupOrderList = () => {
   const navigate = useNavigate();
@@ -19,33 +54,33 @@ const PickupOrderList = () => {
   const [filter, setFilter] = useState<string>('');
 
   useEffect(() => {
-  const fetchPickupOrders = async () => {
-    try {
-      setLoading(true);
-      const data = await pickupOrderService.getPickupOrders();
-      setPickupOrders(data);
-      setFilteredOrders(data);
-      setError(null);
-    } catch (error: any) {
-      console.error('Error fetching pickup orders:', error);
-      
-      // Gestione più specifica degli errori
-      if (error.response?.status === 404) {
-        setError('Endpoint non trovato. Verifica che il server sia avviato.');
-      } else if (error.response?.status === 500) {
-        setError('Errore del server. Verifica che il database sia configurato correttamente.');
-      } else if (error.code === 'ERR_NETWORK') {
-        setError('Impossibile connettersi al server. Verifica che il backend sia in esecuzione.');
-      } else {
-        setError(error.response?.data?.message || 'Errore nel caricamento dei buoni di ritiro');
+    const fetchPickupOrders = async () => {
+      try {
+        setLoading(true);
+        const data = await pickupOrderService.getPickupOrders();
+        setPickupOrders(data);
+        setFilteredOrders(data);
+        setError(null);
+      } catch (error: any) {
+        console.error('Error fetching pickup orders:', error);
+        
+        // Gestione più specifica degli errori
+        if (error.response?.status === 404) {
+          setError('Endpoint non trovato. Verifica che il server sia avviato.');
+        } else if (error.response?.status === 500) {
+          setError('Errore del server. Verifica che il database sia configurato correttamente.');
+        } else if (error.code === 'ERR_NETWORK') {
+          setError('Impossibile connettersi al server. Verifica che il backend sia in esecuzione.');
+        } else {
+          setError(error.response?.data?.message || 'Errore nel caricamento dei buoni di ritiro');
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  fetchPickupOrders();
-}, []);
+    fetchPickupOrders();
+  }, []);
 
   useEffect(() => {
     if (filter === '') {
@@ -53,9 +88,10 @@ const PickupOrderList = () => {
     } else {
       const filtered = pickupOrders.filter(order => 
         order.orderNumber.toLowerCase().includes(filter.toLowerCase()) ||
-        order.sender?.name.toLowerCase().includes(filter.toLowerCase()) ||
-        order.recipient?.name.toLowerCase().includes(filter.toLowerCase()) ||
-        order.basin?.code.toLowerCase().includes(filter.toLowerCase())
+        // MODIFICA: Utilizza direttamente senderName e recipientName
+        order.senderName.toLowerCase().includes(filter.toLowerCase()) ||
+        order.recipientName.toLowerCase().includes(filter.toLowerCase()) ||
+        order.basinCode.toLowerCase().includes(filter.toLowerCase())
       );
       setFilteredOrders(filtered);
     }
@@ -163,9 +199,10 @@ const PickupOrderList = () => {
                     <TableCell>
                       {format(new Date(order.issueDate), 'dd/MM/yyyy', { locale: it })}
                     </TableCell>
-                    <TableCell>{order.sender?.name || 'N/A'}</TableCell>
-                    <TableCell>{order.recipient?.name || 'N/A'}</TableCell>
-                    <TableCell>{order.basin?.code || 'N/A'}</TableCell>
+                    {/* MODIFICA: Accedi direttamente a senderName e recipientName */}
+                    <TableCell>{order.senderName || 'N/A'}</TableCell>
+                    <TableCell>{order.recipientName || 'N/A'}</TableCell>
+                    <TableCell>{order.basinCode || 'N/A'}</TableCell>
                     <TableCell>
                       <Chip 
                         label={getStatusLabel(order.status)} 
