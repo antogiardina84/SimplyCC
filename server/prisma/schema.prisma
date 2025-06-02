@@ -33,9 +33,11 @@ model Client {
   contractId    String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  
+  // Relazioni
   basins        Basin[]
-  sentOrders       PickupOrder[] @relation("SenderOrders")
-  receivedOrders   PickupOrder[] @relation("RecipientOrders")
+  sentOrders    PickupOrder[] @relation("SenderOrders")
+  receivedOrders PickupOrder[] @relation("RecipientOrders")
 }
 
 model Basin {
@@ -47,7 +49,9 @@ model Basin {
   client      Client   @relation(fields: [clientId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-   pickupOrders     PickupOrder[]
+  
+  // Relazioni
+  pickupOrders PickupOrder[]
 }
 
 model PickupOrder {
