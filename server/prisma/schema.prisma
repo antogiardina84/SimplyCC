@@ -7,17 +7,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ================================
+// GESTIONE UTENTI E AUTENTICAZIONE
+// ================================
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
   password  String
   firstName String?
   lastName  String?
-  role      String   @default("USER")
+  role      String   @default("USER") // USER, OPERATOR, MANAGER, ADMIN
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relazioni per operatori
+  assignedOrders    PickupOrder[] @relation("OperatorAssigned")
+  operatorActivities OperatorActivity[]
+  processingSessions Processing[] @relation("ProcessingOperator")
 }
+
+// ================================
+// GESTIONE CLIENTI E BACINI (Amministrativa)
+// ================================
 
 model Client {
   id            String   @id @default(uuid())
@@ -34,17 +47,17 @@ model Client {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   
-  // Relazioni
+  // Relazioni amministrative
   basins        Basin[]
-  sentOrders    PickupOrder[] @relation("SenderOrders")
-  receivedOrders PickupOrder[] @relation("RecipientOrders")
+  pickupOrdersAsClient PickupOrder[] @relation("ClientRelation")
+  deliveries    Delivery[] @relation("DeliveryClient")
 }
 
 model Basin {
   id          String   @id @default(uuid())
   code        String   @unique
   description String?
-  flowType    String
+  flowType    String   // A, B, C, D
   clientId    String
   client      Client   @relation(fields: [clientId], references: [id])
   createdAt   DateTime @default(now())
@@ -52,29 +65,338 @@ model Basin {
   
   // Relazioni
   pickupOrders PickupOrder[]
+  deliveries   Delivery[]
+  analyses     MerceologicalAnalysis[] @relation("AnalysisBasin")
 }
+
+// ================================
+// ENTITÀ LOGISTICHE (Separate da Clienti)
+// ================================
+
+model LogisticEntity {
+  id          String   @id @default(uuid())
+  name        String
+  address     String?
+  city        String?
+  zipCode     String?
+  province    String?
+  phone       String?
+  email       String?
+  contactPerson String?
+  notes       String?
+  entityType  String   // SENDER, RECIPIENT, TRANSPORTER
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relazioni logistiche
+  sentOrders     PickupOrder[] @relation("LogisticSender")
+  receivedOrders PickupOrder[] @relation("LogisticRecipient")
+  transportedOrders PickupOrder[] @relation("LogisticTransporter")
+}
+
+// ================================
+// BUONI DI RITIRO (Esteso con Workflow)
+// ================================
 
 model PickupOrder {
   id               String    @id @default(uuid())
   orderNumber      String    @unique
   issueDate        DateTime
-  scheduledDate    DateTime?
-  completionDate   DateTime?
-  shipperId        String?
-  senderId         String
-  sender           Client    @relation(name: "SenderOrders", fields: [senderId], references: [id])
-  recipientId      String
-  recipient        Client    @relation(name: "RecipientOrders", fields: [recipientId], references: [id])
+  
+  // Date del workflow
+  scheduledDate    DateTime?  // Quando viene programmato
+  loadingDate      DateTime?  // Data carico programmata
+  unloadingDate    DateTime?  // Data scarico programmata
+  completionDate   DateTime?  // Data completamento effettiva
+  
+  // Riferimenti Logistici (Separati)
+  logisticSenderId     String?
+  logisticSender       LogisticEntity? @relation(name: "LogisticSender", fields: [logisticSenderId], references: [id])
+  logisticRecipientId  String?
+  logisticRecipient    LogisticEntity? @relation(name: "LogisticRecipient", fields: [logisticRecipientId], references: [id])
+  logisticTransporterId String?
+  logisticTransporter  LogisticEntity? @relation(name: "LogisticTransporter", fields: [logisticTransporterId], references: [id])
+  
+  // Riferimenti Amministrativi (Manteniamo per compatibilità)
+  clientId         String?
+  client           Client?   @relation(name: "ClientRelation", fields: [clientId], references: [id])
   basinId          String
   basin            Basin     @relation(fields: [basinId], references: [id])
-  flowType         String
+  
+  // Dettagli Tecnici
+  flowType         String    // A, B, C, D
   distanceKm       Float?
-  status           String    @default("PENDING") // PENDING, SCHEDULED, READY, COMPLETED, CANCELLED
-  expectedQuantity Float?
-  actualQuantity   Float?
-  destinationQuantity Float?
+  materialType     String?   // Tipo materiale
+  
+  // Stati del Workflow
+  status           String    @default("DA_EVADERE") 
+  // DA_EVADERE → PROGRAMMATO → IN_EVASIONE → IN_CARICO → CARICATO → SPEDITO → COMPLETO
+  
+  // Quantità e Pesi
+  expectedQuantity Float?    // Quantità prevista
+  actualQuantity   Float?    // Quantità effettiva caricata
+  destinationQuantity Float? // Quantità ricevuta a destino
+  loadedPackages   Int?      // Numero colli caricati
+  departureWeight  Float?    // Peso partenza (Manager)
+  arrivalWeight    Float?    // Peso arrivo (Destinatario)
+  
+  // Gestione Operatori
+  assignedOperatorId String?
+  assignedOperator   User?   @relation(name: "OperatorAssigned", fields: [assignedOperatorId], references: [id])
+  operatorAssignedAt DateTime?
+  
+  // Documenti e Media
   notes            String?
-  documents        String?
+  documents        String?   // JSON per documenti vari
+  loadingPhotos    String?   // JSON per foto carico
+  loadingVideos    String?   // JSON per video carico
+  
+  // Gestione Rifiuti/Respinte
+  isRejected       Boolean   @default(false)
+  rejectionReason  String?
+  rejectionDate    DateTime?
+  
+  // Audit
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+
+  // Relazioni
+  shipment         Shipment?
+  activities       OperatorActivity[]
+  statusHistory    PickupOrderStatusHistory[]
+
+  // Indici per performance
+  @@index([status])
+  @@index([scheduledDate])
+  @@index([basinId])
+  @@index([assignedOperatorId])
+}
+
+// ================================
+// GESTIONE SPEDIZIONI E CALENDARIO
+// ================================
+
+model Shipment {
+  id              String   @id @default(uuid())
+  pickupOrderId   String   @unique
+  pickupOrder     PickupOrder @relation(fields: [pickupOrderId], references: [id])
+  
+  scheduledDate   DateTime // Data programmata
+  timeSlot        String?  // Fascia oraria (es: "09:00-12:00")
+  priority        String   @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  
+  // Pianificazione
+  estimatedDuration Int?   // Durata stimata in minuti
+  specialInstructions String?
+  equipmentNeeded String? // Attrezzature necessarie
+  
+  // Coordinate GPS (se necessario)
+  pickupLatitude  Float?
+  pickupLongitude Float?
+  deliveryLatitude Float?
+  deliveryLongitude Float?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ================================
+// ATTIVITÀ OPERATORI
+// ================================
+
+model OperatorActivity {
+  id              String   @id @default(uuid())
+  pickupOrderId   String
+  pickupOrder     PickupOrder @relation(fields: [pickupOrderId], references: [id])
+  operatorId      String
+  operator        User     @relation(fields: [operatorId], references: [id])
+  
+  activityType    String   // ASSIGNED, STARTED, PHOTOS_UPLOADED, COMPLETED, etc.
+  description     String?
+  
+  // Media allegati
+  photos          String?  // JSON array di path foto
+  videos          String?  // JSON array di path video
+  
+  // Dati specifici attività
+  packageCount    Int?     // Numero colli (se applicabile)
+  notes           String?
+  
+  timestamp       DateTime @default(now())
+}
+
+// ================================
+// STORICO STATI BUONI DI RITIRO
+// ================================
+
+model PickupOrderStatusHistory {
+  id              String   @id @default(uuid())
+  pickupOrderId   String
+  pickupOrder     PickupOrder @relation(fields: [pickupOrderId], references: [id])
+  
+  fromStatus      String?  // Stato precedente
+  toStatus        String   // Nuovo stato
+  changedAt       DateTime @default(now())
+  changedBy       String?  // ID utente che ha fatto il cambio
+  reason          String?  // Motivo del cambio
+  notes           String?
+}
+
+// ================================
+// GESTIONE CONFERIMENTI
+// ================================
+
+model Delivery {
+  id              String   @id @default(uuid())
+  date            DateTime // Solo data, non ora
+  
+  // Riferimenti
+  clientId        String?  // Cliente che conferisce (opzionale)
+  client          Client?  @relation(fields: [clientId], references: [id], name: "DeliveryClient")
+  basinId         String?  // Bacino di destinazione (opzionale)
+  basin           Basin?   @relation(fields: [basinId], references: [id])
+  
+  // Dettagli Materiale
+  materialType    String   // Tipo materiale (CER code)
+  materialDescription String?
+  reference       String   // COREPLA, CORIPET, etc.
+  
+  // Quantità
+  weight          Float    // Peso in tonnellate
+  
+  // Documenti
+  documentNumber  String?  // Numero documento di trasporto
+  documents       String?  // JSON per documenti allegati
+  
+  // Note
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Indici
+  @@index([date])
+  @@index([materialType, reference])
+}
+
+// ================================
+// GESTIONE LAVORAZIONI
+// ================================
+
+model Processing {
+  id              String   @id @default(uuid())
+  date            DateTime // Data lavorazione
+  shift           String   // Turno: MORNING, AFTERNOON, NIGHT
+  
+  // Operatore responsabile
+  operatorId      String?
+  operator        User?    @relation(fields: [operatorId], references: [id], name: "ProcessingOperator")
+  
+  // Materiale in ingresso
+  inputMaterialType String
+  inputWeight     Float    // Peso materiale in ingresso
+  inputReference  String   // COREPLA, CORIPET, etc.
+  
+  // Efficienza lavorazione
+  efficiency      Float?   // Percentuale di resa
+  wasteWeight     Float?   // Peso scarti prodotti
+  
+  // Note
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relazioni
+  outputs         ProcessingOutput[]
+
+  // Indici
+  @@index([date, shift])
+  @@index([operatorId])
+}
+
+model ProcessingOutput {
+  id              String   @id @default(uuid())
+  processingId    String
+  processing      Processing @relation(fields: [processingId], references: [id])
+  
+  // Prodotto ottenuto
+  outputMaterialType String
+  outputWeight    Float    // Peso prodotto
+  outputReference String   // COREPLA, CORIPET, etc.
+  quality         String?  // Qualità del prodotto
+  
+  createdAt       DateTime @default(now())
+}
+
+// ================================
+// GESTIONE GIACENZE
+// ================================
+
+model Inventory {
+  id              String   @id @default(uuid())
+  date            DateTime // Data di riferimento
+  
+  // Materiale
+  materialType    String   // Tipo materiale
+  reference       String   // COREPLA, CORIPET, etc.
+  
+  // Movimenti
+  initialStock    Float    // Giacenza iniziale
+  deliveries      Float    @default(0) // Ingressi del giorno
+  processing      Float    @default(0) // Utilizzato in lavorazione
+  shipments       Float    @default(0) // Uscite del giorno
+  adjustments     Float    @default(0) // Variazioni/correzioni
+  
+  // Giacenza finale
+  finalStock      Float    // Giacenza finale calcolata
+  
+  // Note
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([date, materialType, reference]) // Un record per giorno/materiale/riferimento
+  
+  // Indici per performance
+  @@index([date])
+  @@index([materialType, reference])
+}
+
+// ================================
+// GESTIONE ANALISI MERCEOLOGICHE
+// ================================
+
+model MerceologicalAnalysis {
+  id              String   @id @default(uuid())
+  date            DateTime
+  basinId         String
+  basin           Basin    @relation(fields: [basinId], references: [id], name: "AnalysisBasin")
+  flowType        String   // A, B, C, D
+  
+  // Percentuali rilevate
+  foreignFractionPercentage  Float // Frazione estranea
+  plasticPackagingPercentage Float // Imballaggi plastica totali
+  cplPetPercentage          Float // CPL in PET
+  otherCplPercentage        Float // Altri CPL
+  trackersPercentage        Float // Traccianti
+  variousPackagingPercentage Float // Imballaggi vari
+  
+  // Dettagli analisi
+  sampleWeight    Float?   // Peso campione analizzato
+  analysisMethod  String?  // Metodo utilizzato
+  operator        String?  // Chi ha fatto l'analisi
+  
+  // Validità e note
+  isValid         Boolean  @default(true)
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Indici
+  @@index([date])
+  @@index([basinId, flowType])
 }

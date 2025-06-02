@@ -3,6 +3,7 @@
 import { Router } from 'express';
 import { OCRController, uploadMiddleware } from '../controllers/ocrController';
 import { authMiddleware } from '../../../core/middleware/auth.middleware';
+import { ocrLogisticsRoutes } from './ocrLogistics.routes';  // <-- SOLO AGGIUNTA
 
 const router = Router();
 const ocrController = new OCRController();
@@ -27,5 +28,17 @@ router.post('/create', ocrController.createFromExtractedData);
  * Processo completo: estrai dal PDF e crea automaticamente il buono di ritiro
  */
 router.post('/process', uploadMiddleware, ocrController.processAndCreate);
+
+// ================================
+// NUOVE ROUTES LOGISTICS (SOLO AGGIUNTA!)
+// ================================
+
+/**
+ * Routes per integrazione OCR + Logistics
+ * Percorso: /pickup-orders/ocr/logistics/*
+ * 
+ * QUESTE SONO NUOVE ROUTES CHE NON MODIFICANO IL COMPORTAMENTO ESISTENTE
+ */
+router.use('/logistics', ocrLogisticsRoutes);  // <-- SOLO AGGIUNTA
 
 export { router as ocrRoutes };
