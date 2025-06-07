@@ -51,15 +51,42 @@ export const usePickupOrderCreation = (): UsePickupOrderCreationReturn => {
       const errorMessage = err.message || 'Errore durante la creazione del buono di ritiro';
       setError(errorMessage);
       
+      // CORRETTO: Aggiunge tutte le proprietà richieste dalle interfacce
       const failureResult: CreationResult = {
         success: false,
         matchingResults: {
-          sender: { name: extractedData.senderName || '', similarity: 0, isNew: true },
-          recipient: { name: extractedData.recipientName || '', similarity: 0, isNew: true },
-          basin: { code: extractedData.basinCode || '', description: extractedData.basinDescription || '', similarity: 0, isNew: true },
+          sender: { 
+            name: extractedData.senderName || '', 
+            similarity: 0, 
+            isNew: true,
+            isExactMatch: false // AGGIUNTO
+          },
+          recipient: { 
+            name: extractedData.recipientName || '', 
+            similarity: 0, 
+            isNew: true,
+            isExactMatch: false // AGGIUNTO
+          },
+          client: { 
+            name: extractedData.basinDescription || '', 
+            similarity: 0, 
+            isNew: true 
+          }, // AGGIUNTO: Proprietà client mancante
+          basin: { 
+            code: extractedData.basinCode || '', 
+            description: extractedData.basinDescription || '', 
+            similarity: 0, 
+            isNew: true 
+          },
           confidence: 0,
           needsReview: true,
-          suggestions: { alternateSenders: [], alternateRecipients: [], alternateBasins: [] }
+          suggestions: { 
+            alternateSenders: [], 
+            alternateRecipients: [], 
+            alternateTransporters: [], // AGGIUNTO: Proprietà opzionale
+            alternateClients: [],      // AGGIUNTO: Proprietà mancante
+            alternateBasins: [] 
+          }
         },
         message: errorMessage,
         errors: [errorMessage]

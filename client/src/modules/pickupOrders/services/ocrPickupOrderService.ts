@@ -1,147 +1,211 @@
 // client/src/modules/pickupOrders/services/ocrPickupOrderService.ts
 
 import api from '../../../core/services/api';
-// Non importare più Client e Basin se non sono usati come oggetti annidati
-// import type { Client } from '../../clients/services/clientService';
-// import type { Basin } from '../../basins/services/basinService';
 
-export type PickupOrderStatus = 'PENDING' | 'SCHEDULED' | 'READY' | 'COMPLETED' | 'CANCELLED';
+export type PickupOrderStatus = 'DA_EVADERE' | 'PROGRAMMATO' | 'IN_EVASIONE' | 'IN_CARICO' | 'CARICATO' | 'SPEDITO' | 'COMPLETO' | 'CANCELLED';
 
-export interface PickupOrder {
-  id: string;
-  orderNumber: string;
-  issueDate: string; // Mantieni string se il tuo backend restituisce stringhe per le date
-  scheduledDate?: string;
-  completionDate?: string;
-  shipperId?: string; // Questo campo potrebbe non essere rilevato dall'OCR, ma può essere un ID a un trasportatore
-  
-  // NUOVE PROPRIETÀ ESTRATTE DALL'OCR (stringhe dirette)
-  senderName: string; // Aggiungi questa proprietà
-  senderAddress?: string;
-  senderCity?: string;
-  senderEmail?: string;
-  recipientName: string; // Aggiungi questa proprietà
-  recipientAddress?: string;
-  recipientCity?: string;
-  recipientEmail?: string;
-  basinCode: string; // Aggiungi questa proprietà
-  basinDescription?: string; // Aggiungi questa proprietà
-  
-  // Vecchie proprietà che potrebbero non essere più necessarie o da gestire diversamente
-  // senderId: string; // Se il mittente viene gestito solo per nome dall'OCR, l'ID potrebbe essere obsoleto o opzionale
-  // sender?: Client;   // Rimuovi o rendi opzionale se non ricevi più l'oggetto Client completo
-  // recipientId: string; // Come per senderId
-  // recipient?: Client; // Come per sender
-  // basinId: string;     // Come per senderId
-  // basin?: Basin;       // Come per sender
-
-  flowType: string;
-  distanceKm?: number;
-  status: PickupOrderStatus;
-  expectedQuantity?: number;
-  actualQuantity?: number;
-  destinationQuantity?: number;
-  notes?: string;
-  documents?: string;
-  createdAt: string;
-  updatedAt: string;
-  confidence?: number; // Aggiungi se vuoi mostrare la confidenza dell'OCR
+// Interfacce per le entità logistiche
+export interface LogisticEntity {
+  id: string;
+  name: string;
+  address?: string;
+  city?: string;
+  zipCode?: string;
+  province?: string;
+  phone?: string;
+  email?: string;
+  contactPerson?: string;
+  notes?: string;
+  entityType: string;
+  isActive: boolean;
 }
 
-// Le interfacce CreatePickupOrderData e UpdatePickupOrderData dovranno essere aggiornate
-// per riflettere le stesse modifiche (es. senderName, recipientName, basinCode)
-// Se il backend si aspetta ancora senderId, recipientId, basinId per la creazione/aggiornamento,
-// allora queste interfacce devono mantenere sia gli ID che i nomi se necessario.
+// Interfaccia Client (amministrativo)
+export interface Client {
+  id: string;
+  name: string;
+  vatNumber: string;
+  address?: string;
+  city?: string;
+  zipCode?: string;
+  province?: string;
+  phone?: string;
+  email?: string;
+  pec?: string;
+}
+
+// Interfaccia Basin
+export interface Basin {
+  id: string;
+  code: string;
+  description?: string;
+  flowType: string;
+  clientId: string;
+  client?: Client;
+}
+
+// Interfaccia PickupOrder aggiornata secondo schema Prisma
+export interface PickupOrder {
+  id: string;
+  orderNumber: string;
+  issueDate: string;
+  scheduledDate?: string;
+  loadingDate?: string;      // AGGIUNTO: Data carico programmata
+  unloadingDate?: string;    // AGGIUNTO: Data scarico programmata
+  completionDate?: string;
+  
+  // Entità logistiche (MODIFICATO)
+  logisticSenderId?: string;
+  logisticSender?: LogisticEntity;
+  logisticRecipientId?: string;
+  logisticRecipient?: LogisticEntity;
+  logisticTransporterId?: string;
+  logisticTransporter?: LogisticEntity;
+  
+  // Cliente amministrativo e bacino
+  clientId?: string;
+  client?: Client;
+  basinId: string;
+  basin?: Basin;
+  
+  flowType: string;
+  distanceKm?: number;
+  materialType?: string;
+  status: PickupOrderStatus;
+  
+  expectedQuantity?: number;
+  actualQuantity?: number;
+  destinationQuantity?: number;
+  loadedPackages?: number;
+  departureWeight?: number;
+  arrivalWeight?: number;
+  
+  assignedOperatorId?: string;
+  
+  notes?: string;
+  documents?: string;
+  loadingPhotos?: string;
+  loadingVideos?: string;
+  
+  isRejected?: boolean;
+  rejectionReason?: string;
+  rejectionDate?: string;
+  
+  createdAt: string;
+  updatedAt: string;
+  confidence?: number; // Per OCR
+}
+
 export interface CreatePickupOrderData {
   orderNumber: string;
   issueDate: string;
   scheduledDate?: string;
+  loadingDate?: string;      // AGGIUNTO
+  unloadingDate?: string;    // AGGIUNTO
   completionDate?: string;
-  shipperId?: string;
   
-  // Aggiungi questi se il backend li accetta per la creazione
-  senderName: string;
-  recipientName: string;
-  basinCode: string;
-  basinDescription?: string;
-
-  // Mantenere ID se il backend li richiede ancora per collegamenti a entità esistenti
-  senderId?: string; // Potrebbe essere opzionale o non necessario se si usa solo il nome
-  recipientId?: string; // Potrebbe essere opzionale o non necessario
-  basinId?: string; // Potrebbe essere opzionale o non necessario
+  logisticSenderId?: string;    // MODIFICATO
+  logisticRecipientId?: string; // MODIFICATO
+  logisticTransporterId?: string; // AGGIUNTO
   
+  clientId?: string;         // AGGIUNTO
+  basinId: string;
   flowType: string;
   distanceKm?: number;
+  materialType?: string;     // AGGIUNTO
+  
   status?: PickupOrderStatus;
+  
   expectedQuantity?: number;
   actualQuantity?: number;
   destinationQuantity?: number;
+  loadedPackages?: number;   // AGGIUNTO
+  departureWeight?: number;  // AGGIUNTO
+  arrivalWeight?: number;    // AGGIUNTO
+  
+  assignedOperatorId?: string; // AGGIUNTO
+  
   notes?: string;
   documents?: string;
+  loadingPhotos?: string;    // AGGIUNTO
+  loadingVideos?: string;    // AGGIUNTO
+  
+  isRejected?: boolean;      // AGGIUNTO
+  rejectionReason?: string;  // AGGIUNTO
+  rejectionDate?: string;    // AGGIUNTO
 }
 
 export interface UpdatePickupOrderData {
   orderNumber?: string;
   issueDate?: string;
   scheduledDate?: string | null;
+  loadingDate?: string | null;      // AGGIUNTO
+  unloadingDate?: string | null;    // AGGIUNTO
   completionDate?: string | null;
-  shipperId?: string | null;
-
-  // Aggiungi questi se il backend li accetta per l'aggiornamento
-  senderName?: string;
-  recipientName?: string;
-  basinCode?: string;
-  basinDescription?: string;
-
-  // Mantenere ID se il backend li richiede ancora
-  senderId?: string | null;
-  recipientId?: string | null;
-  basinId?: string | null;
   
+  logisticSenderId?: string | null;    // MODIFICATO
+  logisticRecipientId?: string | null; // MODIFICATO
+  logisticTransporterId?: string | null; // AGGIUNTO
+  
+  clientId?: string | null;         // AGGIUNTO
+  basinId?: string;
   flowType?: string;
   distanceKm?: number | null;
+  materialType?: string | null;     // AGGIUNTO
+  
   status?: PickupOrderStatus;
+  
   expectedQuantity?: number | null;
   actualQuantity?: number | null;
   destinationQuantity?: number | null;
+  loadedPackages?: number | null;   // AGGIUNTO
+  departureWeight?: number | null;  // AGGIUNTO
+  arrivalWeight?: number | null;    // AGGIUNTO
+  
+  assignedOperatorId?: string | null; // AGGIUNTO
+  
   notes?: string | null;
   documents?: string | null;
+  loadingPhotos?: string | null;    // AGGIUNTO
+  loadingVideos?: string | null;    // AGGIUNTO
+  
+  isRejected?: boolean;             // AGGIUNTO
+  rejectionReason?: string | null;  // AGGIUNTO
+  rejectionDate?: string | null;    // AGGIUNTO
 }
 
-
-// Le funzioni di servizio API rimangono invariate nel loro funzionamento,
-// ma si aspetteranno i tipi di dati aggiornati.
+// Funzioni API
 export const getPickupOrders = async (): Promise<PickupOrder[]> => {
-  const response = await api.get('/pickup-orders');
-  return response.data;
+  const response = await api.get('/pickup-orders');
+  return response.data;
 };
 
 export const getPickupOrderById = async (id: string): Promise<PickupOrder> => {
-  const response = await api.get(`/pickup-orders/${id}`);
-  return response.data;
+  const response = await api.get(`/pickup-orders/${id}`);
+  return response.data;
 };
 
 export const getPickupOrdersByBasin = async (basinId: string): Promise<PickupOrder[]> => {
-  const response = await api.get(`/pickup-orders/basin/${basinId}`);
-  return response.data;
+  const response = await api.get(`/pickup-orders/basin/${basinId}`);
+  return response.data;
 };
 
 export const getPickupOrdersByClient = async (clientId: string): Promise<PickupOrder[]> => {
-  const response = await api.get(`/pickup-orders/client/${clientId}`);
-  return response.data;
+  const response = await api.get(`/pickup-orders/client/${clientId}`);
+  return response.data;
 };
 
 export const createPickupOrder = async (data: CreatePickupOrderData): Promise<PickupOrder> => {
-  const response = await api.post('/pickup-orders', data);
-  return response.data;
+  const response = await api.post('/pickup-orders', data);
+  return response.data;
 };
 
 export const updatePickupOrder = async (id: string, data: UpdatePickupOrderData): Promise<PickupOrder> => {
-  const response = await api.put(`/pickup-orders/${id}`, data);
-  return response.data;
+  const response = await api.put(`/pickup-orders/${id}`, data);
+  return response.data;
 };
 
 export const deletePickupOrder = async (id: string): Promise<PickupOrder> => {
-  const response = await api.delete(`/pickup-orders/${id}`);
-  return response.data;
+  const response = await api.delete(`/pickup-orders/${id}`);
+  return response.data;
 };

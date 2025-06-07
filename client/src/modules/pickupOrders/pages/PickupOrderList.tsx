@@ -6,44 +6,8 @@ import { Add, Edit, Delete, Visibility } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 
-// Assicurati che PickupOrder rifletta la struttura da ocrPickupOrderService.ts o dal tuo database
-// Se il tuo database salvasse 'senderName' e 'recipientName' direttamente, questa è la modifica corretta.
-// Se il tuo database salva 'sender' e 'recipient' come oggetti con 'name', allora la definizione di PickupOrder
-// deve riflettere questo, e il codice originale sarebbe stato corretto.
-// Per la consistenza con la tua ExtractedPickupOrderData, assumiamo che siano stringhe dirette.
-import * as pickupOrderService from '../services/ocrPickupOrderService'; // O il servizio che recupera i PickupOrder dal DB
-
-// Definizione dell'interfaccia PickupOrder basata sulla tua ExtractedPickupOrderData
-// e potenzialmente altri campi dal database.
-// Se PickupOrderService recupera i dati con sender/recipient come oggetti, questa interfaccia andrebbe aggiornata.
-// Per il contesto di questo problema, assumiamo che senderName e recipientName siano stringhe dirette.
-export interface PickupOrder {
-  id: string; // Assumiamo un ID per gli elementi della lista
-  orderNumber: string;
-  issueDate: string; // Le date dal server sono spesso stringhe ISO
-  senderName: string; // Modificato da sender?.name
-  recipientName: string; // Modificato da recipient?.name
-  basinCode: string; // Modificato da basin?.code
-  basinDescription?: string;
-  flowType?: string;
-  distanceKm?: number;
-  expectedQuantity?: number;
-  actualQuantity?: number;
-  destinationQuantity?: number;
-  notes?: string;
-  status: PickupOrderStatus;
-  scheduledDate?: string;
-  createdAt: string;
-  updatedAt: string;
-  // Aggiungi qui altre proprietà se presenti nel tuo modello di database finale
-  // Esempio:
-  // sender: { id: string; name: string; vatNumber?: string; }; // Se il DB li gestisce come oggetti
-  // recipient: { id: string; name: string; vatNumber?: string; }; // Se il DB li gestisce come oggetti
-  // basin: { id: string; code: string; description?: string; }; // Se il DB li gestisce come oggetti
-}
-
-export type PickupOrderStatus = 'PENDING' | 'SCHEDULED' | 'READY' | 'COMPLETED' | 'CANCELLED';
-
+import * as pickupOrderService from '../services/ocrPickupOrderService';
+import type { PickupOrder, PickupOrderStatus } from '../services/ocrPickupOrderService';
 
 const PickupOrderList = () => {
   const navigate = useNavigate();
@@ -64,7 +28,6 @@ const PickupOrderList = () => {
       } catch (error: any) {
         console.error('Error fetching pickup orders:', error);
         
-        // Gestione più specifica degli errori
         if (error.response?.status === 404) {
           setError('Endpoint non trovato. Verifica che il server sia avviato.');
         } else if (error.response?.status === 500) {
@@ -88,10 +51,10 @@ const PickupOrderList = () => {
     } else {
       const filtered = pickupOrders.filter(order => 
         order.orderNumber.toLowerCase().includes(filter.toLowerCase()) ||
-        // MODIFICA: Utilizza direttamente senderName e recipientName
-        order.senderName.toLowerCase().includes(filter.toLowerCase()) ||
-        order.recipientName.toLowerCase().includes(filter.toLowerCase()) ||
-        order.basinCode.toLowerCase().includes(filter.toLowerCase())
+        // CORRETTO: Usa le entità logistiche
+        (order.logisticSender?.name || '').toLowerCase().includes(filter.toLowerCase()) ||
+        (order.logisticRecipient?.name || '').toLowerCase().includes(filter.toLowerCase()) ||
+        (order.basin?.code || '').toLowerCase().includes(filter.toLowerCase())
       );
       setFilteredOrders(filtered);
     }
@@ -119,10 +82,13 @@ const PickupOrderList = () => {
 
   const getStatusLabel = (status: PickupOrderStatus) => {
     switch (status) {
-      case 'PENDING': return 'In Attesa';
-      case 'SCHEDULED': return 'Programmato';
-      case 'READY': return 'Pronto';
-      case 'COMPLETED': return 'Completato';
+      case 'DA_EVADERE': return 'Da Evadere';
+      case 'PROGRAMMATO': return 'Programmato';
+      case 'IN_EVASIONE': return 'In Evasione';
+      case 'IN_CARICO': return 'In Carico';
+      case 'CARICATO': return 'Caricato';
+      case 'SPEDITO': return 'Spedito';
+      case 'COMPLETO': return 'Completo';
       case 'CANCELLED': return 'Annullato';
       default: return status;
     }
@@ -130,10 +96,13 @@ const PickupOrderList = () => {
 
   const getStatusColor = (status: PickupOrderStatus) => {
     switch (status) {
-      case 'PENDING': return 'warning';
-      case 'SCHEDULED': return 'info';
-      case 'READY': return 'primary';
-      case 'COMPLETED': return 'success';
+      case 'DA_EVADERE': return 'warning';
+      case 'PROGRAMMATO': return 'info';
+      case 'IN_EVASIONE': return 'info';
+      case 'IN_CARICO': return 'primary';
+      case 'CARICATO': return 'primary';
+      case 'SPEDITO': return 'success';
+      case 'COMPLETO': return 'success';
       case 'CANCELLED': return 'error';
       default: return 'default';
     }
@@ -176,7 +145,7 @@ const PickupOrderList = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Numero Buono</TableCell>
-                <TableCell>Data Emissione</TableCell>
+                <TableCell>Data Carico</TableCell> {/* CAMBIATO: da "Data Emissione" a "Data Carico" */}
                 <TableCell>Mittente</TableCell>
                 <TableCell>Destinatario</TableCell>
                 <TableCell>Bacino</TableCell>
@@ -197,12 +166,20 @@ const PickupOrderList = () => {
                   <TableRow key={order.id}>
                     <TableCell>{order.orderNumber}</TableCell>
                     <TableCell>
-                      {format(new Date(order.issueDate), 'dd/MM/yyyy', { locale: it })}
+                      {/* CORRETTO: Mostra loadingDate se presente, altrimenti scheduledDate, altrimenti issueDate */}
+                      {order.loadingDate 
+                        ? format(new Date(order.loadingDate), 'dd/MM/yyyy', { locale: it })
+                        : order.scheduledDate 
+                          ? format(new Date(order.scheduledDate), 'dd/MM/yyyy', { locale: it })
+                          : format(new Date(order.issueDate), 'dd/MM/yyyy', { locale: it })}
                     </TableCell>
-                    {/* MODIFICA: Accedi direttamente a senderName e recipientName */}
-                    <TableCell>{order.senderName || 'N/A'}</TableCell>
-                    <TableCell>{order.recipientName || 'N/A'}</TableCell>
-                    <TableCell>{order.basinCode || 'N/A'}</TableCell>
+                    {/* CORRETTO: Usa le entità logistiche */}
+                    <TableCell>{order.logisticSender?.name || 'N/A'}</TableCell>
+                    <TableCell>{order.logisticRecipient?.name || 'N/A'}</TableCell>
+                    <TableCell>
+                      {order.basin?.code || 'N/A'}
+                      {order.basin?.description && ` - ${order.basin.description}`}
+                    </TableCell>
                     <TableCell>
                       <Chip 
                         label={getStatusLabel(order.status)} 

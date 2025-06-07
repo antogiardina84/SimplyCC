@@ -1,4 +1,4 @@
-// client/src/modules/pickupOrders/pages/PickupOrderForm.tsx
+// client/src/modules/pickupOrders/pages/PickupOrderForm.tsx - VERSIONE CORRETTA
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -6,12 +6,69 @@ import { Container, Typography, TextField, Button, Paper, Box, FormControl,
   InputLabel, Select, MenuItem, Alert, CircularProgress, Grid } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
 import { format } from 'date-fns';
-import * as pickupOrderService from '../services/ocrPickupOrderService';
-import * as clientService from '../../clients/services/clientService';
-import * as basinService from '../../basins/services/basinService';
-import type { CreatePickupOrderData, UpdatePickupOrderData } from '../services/ocrPickupOrderService';
-import type { Client } from '../../clients/services/clientService';
-import type { Basin } from '../../basins/services/basinService';
+import api from '../../../core/services/api';
+
+// Interfacce aggiornate per il nuovo schema - CON TIPI CORRETTI
+interface PickupOrderFormData {
+  orderNumber: string;
+  issueDate: string;
+  scheduledDate?: string;
+  loadingDate?: string;
+  unloadingDate?: string;
+  completionDate?: string;
+  
+  // Entità logistiche
+  logisticSenderId?: string;    
+  logisticRecipientId?: string; 
+  logisticTransporterId?: string;
+  
+  // Cliente convenzionato
+  clientId?: string;
+  
+  basinId: string;
+  flowType: string;
+  distanceKm?: number;        // CORRETTO: number per i campi numerici
+  materialType?: string;
+  
+  status?: string;
+  
+  expectedQuantity?: number;   // CORRETTO: number
+  actualQuantity?: number;     // CORRETTO: number
+  destinationQuantity?: number; // CORRETTO: number
+  loadedPackages?: number;     // CORRETTO: number
+  departureWeight?: number;    // CORRETTO: number
+  arrivalWeight?: number;      // CORRETTO: number
+  
+  assignedOperatorId?: string;
+  
+  notes?: string;
+  documents?: string;
+  loadingPhotos?: string;
+  loadingVideos?: string;
+  
+  isRejected?: boolean;
+  rejectionReason?: string;
+  rejectionDate?: string;
+}
+
+interface Client {
+  id: string;
+  name: string;
+  vatNumber?: string;
+}
+
+interface Basin {
+  id: string;
+  code: string;
+  description?: string;
+}
+
+interface LogisticEntity {
+  id: string;
+  name: string;
+  address?: string;
+  city?: string;
+}
 
 const PickupOrderForm = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,8 +77,9 @@ const PickupOrderForm = () => {
   const [initialLoading, setInitialLoading] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
   const [basins, setBasins] = useState<Basin[]>([]);
+  const [logisticEntities, setLogisticEntities] = useState<LogisticEntity[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const { control, handleSubmit, reset, formState: { errors } } = useForm();
+  const { control, handleSubmit, reset, formState: { errors } } = useForm<PickupOrderFormData>();
   const isEditMode = !!id;
 
   useEffect(() => {
@@ -29,35 +87,65 @@ const PickupOrderForm = () => {
       try {
         setInitialLoading(true);
         
-        // Carica clienti e bacini
-        const [clientsData, basinsData] = await Promise.all([
-          clientService.getClients(),
-          basinService.getBasins()
+        // Carica tutti i dati necessari
+        const [clientsResponse, basinsResponse] = await Promise.all([
+          api.get('/clients'),
+          api.get('/basins'),
         ]);
         
-        setClients(clientsData);
-        setBasins(basinsData);
+        setClients(clientsResponse.data);
+        setBasins(basinsResponse.data);
+        
+        // Mock logistic entities per ora (implementare endpoint /logistics se necessario)
+        setLogisticEntities([
+          { id: '1', name: 'CC DOMUS RICYCLE', city: 'CATANIA' },
+          { id: '2', name: 'CSS ECOLOGISTIC SPA', city: 'GINOSA' },
+        ]);
         
         // Se è modalità modifica, carica i dati del buono di ritiro
         if (isEditMode) {
-          const orderData = await pickupOrderService.getPickupOrderById(id);
+          const orderResponse = await api.get(`/pickup-orders/${id}`);
+          const orderData = orderResponse.data;
+          
+          // CORRETTO: Gestione dei tipi per i valori numerici
           reset({
             orderNumber: orderData.orderNumber,
             issueDate: format(new Date(orderData.issueDate), 'yyyy-MM-dd'),
             scheduledDate: orderData.scheduledDate ? format(new Date(orderData.scheduledDate), 'yyyy-MM-dd') : '',
+            loadingDate: orderData.loadingDate ? format(new Date(orderData.loadingDate), 'yyyy-MM-dd') : '',
+            unloadingDate: orderData.unloadingDate ? format(new Date(orderData.unloadingDate), 'yyyy-MM-dd') : '',
             completionDate: orderData.completionDate ? format(new Date(orderData.completionDate), 'yyyy-MM-dd') : '',
-            shipperId: orderData.shipperId || '',
-            senderId: orderData.senderId,
-            recipientId: orderData.recipientId,
+            
+            // Entità logistiche aggiornate
+            logisticSenderId: orderData.logisticSenderId || '',
+            logisticRecipientId: orderData.logisticRecipientId || '',
+            logisticTransporterId: orderData.logisticTransporterId || '',
+            
+            clientId: orderData.clientId || '',
             basinId: orderData.basinId,
             flowType: orderData.flowType,
-            distanceKm: orderData.distanceKm || '',
+            distanceKm: orderData.distanceKm || undefined,     // CORRETTO: number o undefined
+            materialType: orderData.materialType || '',
+            
             status: orderData.status,
-            expectedQuantity: orderData.expectedQuantity || '',
-            actualQuantity: orderData.actualQuantity || '',
-            destinationQuantity: orderData.destinationQuantity || '',
+            
+            expectedQuantity: orderData.expectedQuantity || undefined,       // CORRETTO: number o undefined
+            actualQuantity: orderData.actualQuantity || undefined,           // CORRETTO: number o undefined
+            destinationQuantity: orderData.destinationQuantity || undefined, // CORRETTO: number o undefined
+            loadedPackages: orderData.loadedPackages || undefined,           // CORRETTO: number o undefined
+            departureWeight: orderData.departureWeight || undefined,         // CORRETTO: number o undefined
+            arrivalWeight: orderData.arrivalWeight || undefined,             // CORRETTO: number o undefined
+            
+            assignedOperatorId: orderData.assignedOperatorId || '',
+            
             notes: orderData.notes || '',
             documents: orderData.documents || '',
+            loadingPhotos: orderData.loadingPhotos || '',
+            loadingVideos: orderData.loadingVideos || '',
+            
+            isRejected: orderData.isRejected || false,
+            rejectionReason: orderData.rejectionReason || '',
+            rejectionDate: orderData.rejectionDate ? format(new Date(orderData.rejectionDate), 'yyyy-MM-dd') : '',
           });
         }
       } catch (error: any) {
@@ -71,53 +159,55 @@ const PickupOrderForm = () => {
     fetchData();
   }, [id, isEditMode, reset]);
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: PickupOrderFormData) => {
     try {
       setLoading(true);
       setError(null);
       
+      // Prepara i dati per l'API
+      const submitData = {
+        orderNumber: data.orderNumber,
+        issueDate: data.issueDate,
+        scheduledDate: data.scheduledDate || null,
+        loadingDate: data.loadingDate || null,
+        unloadingDate: data.unloadingDate || null,
+        completionDate: data.completionDate || null,
+        
+        logisticSenderId: data.logisticSenderId || null,
+        logisticRecipientId: data.logisticRecipientId || null,
+        logisticTransporterId: data.logisticTransporterId || null,
+        
+        clientId: data.clientId || null,
+        basinId: data.basinId,
+        flowType: data.flowType,
+        distanceKm: data.distanceKm || null,
+        materialType: data.materialType || null,
+        
+        status: data.status || 'DA_EVADERE',
+        
+        expectedQuantity: data.expectedQuantity || null,
+        actualQuantity: data.actualQuantity || null,
+        destinationQuantity: data.destinationQuantity || null,
+        loadedPackages: data.loadedPackages || null,
+        departureWeight: data.departureWeight || null,
+        arrivalWeight: data.arrivalWeight || null,
+        
+        assignedOperatorId: data.assignedOperatorId || null,
+        
+        notes: data.notes || null,
+        documents: data.documents || null,
+        loadingPhotos: data.loadingPhotos || null,
+        loadingVideos: data.loadingVideos || null,
+        
+        isRejected: data.isRejected || false,
+        rejectionReason: data.rejectionReason || null,
+        rejectionDate: data.rejectionDate || null,
+      };
+      
       if (isEditMode) {
-        const updateData: UpdatePickupOrderData = {
-          orderNumber: data.orderNumber,
-          issueDate: data.issueDate,
-          scheduledDate: data.scheduledDate || null,
-          completionDate: data.completionDate || null,
-          shipperId: data.shipperId || null,
-          senderId: data.senderId,
-          recipientId: data.recipientId,
-          basinId: data.basinId,
-          flowType: data.flowType,
-          distanceKm: data.distanceKm ? parseFloat(data.distanceKm) : null,
-          status: data.status,
-          expectedQuantity: data.expectedQuantity ? parseFloat(data.expectedQuantity) : null,
-          actualQuantity: data.actualQuantity ? parseFloat(data.actualQuantity) : null,
-          destinationQuantity: data.destinationQuantity ? parseFloat(data.destinationQuantity) : null,
-          notes: data.notes || null,
-          documents: data.documents || null,
-        };
-        
-        await pickupOrderService.updatePickupOrder(id, updateData);
+        await api.put(`/pickup-orders/${id}`, submitData);
       } else {
-        const createData: CreatePickupOrderData = {
-          orderNumber: data.orderNumber,
-          issueDate: data.issueDate,
-          scheduledDate: data.scheduledDate || undefined,
-          completionDate: data.completionDate || undefined,
-          shipperId: data.shipperId || undefined,
-          senderId: data.senderId,
-          recipientId: data.recipientId,
-          basinId: data.basinId,
-          flowType: data.flowType,
-          distanceKm: data.distanceKm ? parseFloat(data.distanceKm) : undefined,
-          status: data.status || 'PENDING',
-          expectedQuantity: data.expectedQuantity ? parseFloat(data.expectedQuantity) : undefined,
-          actualQuantity: data.actualQuantity ? parseFloat(data.actualQuantity) : undefined,
-          destinationQuantity: data.destinationQuantity ? parseFloat(data.destinationQuantity) : undefined,
-          notes: data.notes || undefined,
-          documents: data.documents || undefined,
-        };
-        
-        await pickupOrderService.createPickupOrder(createData);
+        await api.post('/pickup-orders', submitData);
       }
       
       navigate('/pickup-orders');
@@ -140,7 +230,7 @@ const PickupOrderForm = () => {
   }
 
   return (
-    <Container maxWidth="md">
+    <Container maxWidth="lg">
       <Typography variant="h4" component="h1" gutterBottom>
         {isEditMode ? 'Modifica Buono di Ritiro' : 'Nuovo Buono di Ritiro'}
       </Typography>
@@ -149,7 +239,12 @@ const PickupOrderForm = () => {
       
       <Paper sx={{ p: 3 }}>
         <Box component="form" onSubmit={handleSubmit(onSubmit)}>
-          <Grid container spacing={2}>
+          <Grid container spacing={3}>
+            {/* Informazioni Base */}
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom>Informazioni Generali</Typography>
+            </Grid>
+            
             <Grid item xs={12} md={6}>
               <Controller
                 name="orderNumber"
@@ -162,7 +257,7 @@ const PickupOrderForm = () => {
                     fullWidth
                     label="Numero Buono"
                     error={!!errors.orderNumber}
-                    helperText={errors.orderNumber?.message as string}
+                    helperText={errors.orderNumber?.message}
                   />
                 )}
               />
@@ -182,25 +277,82 @@ const PickupOrderForm = () => {
                     type="date"
                     InputLabelProps={{ shrink: true }}
                     error={!!errors.issueDate}
-                    helperText={errors.issueDate?.message as string}
+                    helperText={errors.issueDate?.message}
                   />
                 )}
               />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            {/* Date aggiuntive */}
+            <Grid item xs={12} md={4}>
               <Controller
-                name="senderId"
+                name="scheduledDate"
                 control={control}
                 defaultValue=""
-                rules={{ required: 'Mittente è obbligatorio' }}
                 render={({ field }) => (
-                  <FormControl fullWidth error={!!errors.senderId}>
-                    <InputLabel>Mittente</InputLabel>
-                    <Select {...field} label="Mittente">
-                      {clients.map((client) => (
-                        <MenuItem key={client.id} value={client.id}>
-                          {client.name} ({client.vatNumber})
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Data Programmazione"
+                    type="date"
+                    InputLabelProps={{ shrink: true }}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <Controller
+                name="loadingDate"
+                control={control}
+                defaultValue=""
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Data Carico"
+                    type="date"
+                    InputLabelProps={{ shrink: true }}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <Controller
+                name="unloadingDate"
+                control={control}
+                defaultValue=""
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Data Scarico"
+                    type="date"
+                    InputLabelProps={{ shrink: true }}
+                  />
+                )}
+              />
+            </Grid>
+
+            {/* Entità Logistiche */}
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Entità Logistiche</Typography>
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <Controller
+                name="logisticSenderId"
+                control={control}
+                defaultValue=""
+                render={({ field }) => (
+                  <FormControl fullWidth>
+                    <InputLabel>Mittente Logistico</InputLabel>
+                    <Select {...field} label="Mittente Logistico">
+                      <MenuItem value="">Nessuno</MenuItem>
+                      {logisticEntities.map((entity) => (
+                        <MenuItem key={entity.id} value={entity.id}>
+                          {entity.name} {entity.city && `(${entity.city})`}
                         </MenuItem>
                       ))}
                     </Select>
@@ -209,19 +361,66 @@ const PickupOrderForm = () => {
               />
             </Grid>
 
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <Controller
-                name="recipientId"
+                name="logisticRecipientId"
                 control={control}
                 defaultValue=""
-                rules={{ required: 'Destinatario è obbligatorio' }}
                 render={({ field }) => (
-                  <FormControl fullWidth error={!!errors.recipientId}>
-                    <InputLabel>Destinatario</InputLabel>
-                    <Select {...field} label="Destinatario">
+                  <FormControl fullWidth>
+                    <InputLabel>Destinatario Logistico</InputLabel>
+                    <Select {...field} label="Destinatario Logistico">
+                      <MenuItem value="">Nessuno</MenuItem>
+                      {logisticEntities.map((entity) => (
+                        <MenuItem key={entity.id} value={entity.id}>
+                          {entity.name} {entity.city && `(${entity.city})`}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <Controller
+                name="logisticTransporterId"
+                control={control}
+                defaultValue=""
+                render={({ field }) => (
+                  <FormControl fullWidth>
+                    <InputLabel>Trasportatore Logistico</InputLabel>
+                    <Select {...field} label="Trasportatore Logistico">
+                      <MenuItem value="">Nessuno</MenuItem>
+                      {logisticEntities.map((entity) => (
+                        <MenuItem key={entity.id} value={entity.id}>
+                          {entity.name} {entity.city && `(${entity.city})`}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+              />
+            </Grid>
+
+            {/* Cliente e Bacino */}
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Cliente e Bacino</Typography>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Controller
+                name="clientId"
+                control={control}
+                defaultValue=""
+                render={({ field }) => (
+                  <FormControl fullWidth>
+                    <InputLabel>Cliente Convenzionato</InputLabel>
+                    <Select {...field} label="Cliente Convenzionato">
+                      <MenuItem value="">Nessuno</MenuItem>
                       {clients.map((client) => (
                         <MenuItem key={client.id} value={client.id}>
-                          {client.name} ({client.vatNumber})
+                          {client.name} {client.vatNumber && `(${client.vatNumber})`}
                         </MenuItem>
                       ))}
                     </Select>
@@ -251,6 +450,7 @@ const PickupOrderForm = () => {
               />
             </Grid>
 
+            {/* Dettagli Flusso */}
             <Grid item xs={12} md={6}>
               <Controller
                 name="flowType"
@@ -271,20 +471,58 @@ const PickupOrderForm = () => {
               />
             </Grid>
 
+            <Grid item xs={12} md={6}>
+              <Controller
+                name="materialType"
+                control={control}
+                defaultValue=""
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Tipo Materiale"
+                  />
+                )}
+              />
+            </Grid>
+
+            {/* CORRETTO: distanceKm con defaultValue undefined per campi numerici */}
+            <Grid item xs={12} md={6}>
+              <Controller
+                name="distanceKm"
+                control={control}
+                defaultValue={undefined}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Distanza (km)"
+                    type="number"
+                    inputProps={{ step: 0.1, min: 0 }}
+                    value={field.value || ''}
+                    onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                  />
+                )}
+              />
+            </Grid>
+
             {isEditMode && (
               <Grid item xs={12} md={6}>
                 <Controller
                   name="status"
                   control={control}
-                  defaultValue="PENDING"
+                  defaultValue="DA_EVADERE"
                   render={({ field }) => (
                     <FormControl fullWidth>
                       <InputLabel>Stato</InputLabel>
                       <Select {...field} label="Stato">
-                        <MenuItem value="PENDING">In Attesa</MenuItem>
-                        <MenuItem value="SCHEDULED">Programmato</MenuItem>
-                        <MenuItem value="READY">Pronto</MenuItem>
-                        <MenuItem value="COMPLETED">Completato</MenuItem>
+                        <MenuItem value="DA_EVADERE">Da Evadere</MenuItem>
+                        <MenuItem value="PROGRAMMATO">Programmato</MenuItem>
+                        <MenuItem value="IN_EVASIONE">In Evasione</MenuItem>
+                        <MenuItem value="IN_CARICO">In Carico</MenuItem>
+                        <MenuItem value="CARICATO">Caricato</MenuItem>
+                        <MenuItem value="SPEDITO">Spedito</MenuItem>
+                        <MenuItem value="COMPLETO">Completo</MenuItem>
                         <MenuItem value="CANCELLED">Annullato</MenuItem>
                       </Select>
                     </FormControl>
@@ -293,45 +531,16 @@ const PickupOrderForm = () => {
               </Grid>
             )}
 
-            <Grid item xs={12} md={6}>
-              <Controller
-                name="scheduledDate"
-                control={control}
-                defaultValue=""
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    fullWidth
-                    label="Data Programmazione"
-                    type="date"
-                    InputLabelProps={{ shrink: true }}
-                  />
-                )}
-              />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <Controller
-                name="distanceKm"
-                control={control}
-                defaultValue=""
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    fullWidth
-                    label="Distanza (km)"
-                    type="number"
-                    inputProps={{ step: 0.1, min: 0 }}
-                  />
-                )}
-              />
+            {/* Quantità e Pesi - TUTTI CORRETTI */}
+            <Grid item xs={12}>
+              <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>Quantità e Pesi</Typography>
             </Grid>
 
             <Grid item xs={12} md={4}>
               <Controller
                 name="expectedQuantity"
                 control={control}
-                defaultValue=""
+                defaultValue={undefined}
                 render={({ field }) => (
                   <TextField
                     {...field}
@@ -339,6 +548,8 @@ const PickupOrderForm = () => {
                     label="Quantità Prevista (t)"
                     type="number"
                     inputProps={{ step: 0.001, min: 0 }}
+                    value={field.value || ''}
+                    onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
                   />
                 )}
               />
@@ -348,7 +559,7 @@ const PickupOrderForm = () => {
               <Controller
                 name="actualQuantity"
                 control={control}
-                defaultValue=""
+                defaultValue={undefined}
                 render={({ field }) => (
                   <TextField
                     {...field}
@@ -356,11 +567,90 @@ const PickupOrderForm = () => {
                     label="Quantità Effettiva (t)"
                     type="number"
                     inputProps={{ step: 0.001, min: 0 }}
+                    value={field.value || ''}
+                    onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
                   />
                 )}
               />
             </Grid>
 
+            <Grid item xs={12} md={4}>
+              <Controller
+                name="destinationQuantity"
+                control={control}
+                defaultValue={undefined}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Quantità a Destino (t)"
+                    type="number"
+                    inputProps={{ step: 0.001, min: 0 }}
+                    value={field.value || ''}
+                    onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <Controller
+                name="departureWeight"
+                control={control}
+                defaultValue={undefined}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Peso Partenza (t)"
+                    type="number"
+                    inputProps={{ step: 0.001, min: 0 }}
+                    value={field.value || ''}
+                    onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <Controller
+                name="arrivalWeight"
+                control={control}
+                defaultValue={undefined}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Peso Arrivo (t)"
+                    type="number"
+                    inputProps={{ step: 0.001, min: 0 }}
+                    value={field.value || ''}
+                    onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
+                  />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <Controller
+                name="loadedPackages"
+                control={control}
+                defaultValue={undefined}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Numero Colli"
+                    type="number"
+                    inputProps={{ min: 0 }}
+                    value={field.value || ''}
+                    onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                  />
+                )}
+              />
+            </Grid>
+
+            {/* Note */}
             <Grid item xs={12}>
               <Controller
                 name="notes"

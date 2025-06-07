@@ -4,25 +4,44 @@ import api from '../../../core/services/api';
 import type { ExtractedPickupOrderData } from './pdfTextService';
 import type { LogisticEntitySuggestion, LogisticMatchingResponse } from './enhancedCreationService';
 
-// Definiamo i tipi localmente invece di importarli o li allineiamo con il backend
+// Interfaccia completa aggiornata con tutti i nuovi campi dello schema Prisma
 export interface CreatePickupOrderData {
   orderNumber: string;
   issueDate: string;
   scheduledDate?: string;
+  loadingDate?: string;      // Data carico
+  unloadingDate?: string;    // Data scarico
   completionDate?: string;
-  logisticShipperId?: string;
-  logisticSenderId: string;
-  logisticRecipientId: string;
-  logisticTransporterId?: string; // Nuova aggiunta per il trasportatore logistico (opzionale)
-  basinId: string;
+  
+  logisticSenderId?: string;    // Entità logistiche
+  logisticRecipientId?: string; 
+  logisticTransporterId?: string; 
+  
+  clientId?: string;         // Cliente convenzionato
+  basinId?: string;          // Bacino (reso opzionale per sicurezza TypeScript)
   flowType: string;
   distanceKm?: number;
+  materialType?: string;     // Tipo materiale
+  
   status?: string;
+  
   expectedQuantity?: number;
   actualQuantity?: number;
   destinationQuantity?: number;
+  loadedPackages?: number;   // Numero colli
+  departureWeight?: number;  // Peso partenza
+  arrivalWeight?: number;    // Peso arrivo
+  
+  assignedOperatorId?: string; // Operatore assegnato
+  
   notes?: string;
   documents?: string;
+  loadingPhotos?: string;    // Foto carico
+  loadingVideos?: string;    // Video carico
+  
+  isRejected?: boolean;      // Se rifiutato
+  rejectionReason?: string;  // Motivo rifiuto
+  rejectionDate?: string;    // Data rifiuto
 }
 
 export interface LogisticEntityMatchResult {
@@ -32,6 +51,13 @@ export interface LogisticEntityMatchResult {
   similarity: number;
   isNew: boolean;
   isExactMatch: boolean;
+}
+
+export interface ClientMatchResult {
+  id?: string;
+  name: string;
+  similarity: number;
+  isNew: boolean;
 }
 
 export interface BasinMatchResult {
@@ -45,16 +71,16 @@ export interface BasinMatchResult {
 export interface MatchingResults {
   sender: LogisticEntityMatchResult;
   recipient: LogisticEntityMatchResult;
-  transporter?: LogisticEntityMatchResult; // Aggiunto il trasportatore (opzionale)
-  shipper?: LogisticEntityMatchResult; // Aggiunto lo shipper (opzionale)
+  transporter?: LogisticEntityMatchResult;
+  client: ClientMatchResult;
   basin: BasinMatchResult;
   confidence: number;
   needsReview: boolean;
   suggestions: {
     alternateSenders: LogisticEntityMatchResult[];
     alternateRecipients: LogisticEntityMatchResult[];
-    alternateTransporters?: LogisticEntityMatchResult[]; // Aggiunto (opzionale)
-    alternateShippers?: LogisticEntityMatchResult[]; // Aggiunto (opzionale)
+    alternateTransporters?: LogisticEntityMatchResult[];
+    alternateClients: ClientMatchResult[];
     alternateBasins: BasinMatchResult[];
   };
 }
@@ -112,20 +138,16 @@ const levenshteinDistance = (str1: string, str2: string): number => {
 };
 
 /**
- * Trova il miglior match per un'entità logistica (mittente, destinatario, trasportatore, shipper)
- * basandosi sulle LogisticEntitySuggestion restituite dal backend.
- * Restituisce 'undefined' se il nome estratto è vuoto o non definito.
+ * Trova il miglior match per un'entità logistica
  */
 const findBestLogisticEntityMatch = (extractedName: string | undefined, suggestions: LogisticEntitySuggestion[]): LogisticEntityMatchResult | undefined => {
-  const trimmedName = extractedName?.trim(); // Trimma il nome estratto
+  const trimmedName = extractedName?.trim();
 
-  // Se il nome estratto è vuoto o non definito, non cerchiamo match e non lo consideriamo "nuovo" in questo contesto.
   if (!trimmedName) {
     return undefined;
   }
 
   if (!suggestions || suggestions.length === 0) {
-    // Se non ci sono suggerimenti, consideralo una nuova entità
     return {
       name: trimmedName,
       city: undefined,
@@ -154,21 +176,20 @@ const findBestLogisticEntityMatch = (extractedName: string | undefined, suggesti
         isExactMatch: true
       };
     }
-    // Considera la similarità se non c'è un match esatto perfetto
+    
     if (suggestion.similarity > bestMatch.similarity) {
       bestMatch = {
         id: suggestion.id,
         name: suggestion.name,
         city: suggestion.city,
         similarity: suggestion.similarity,
-        isNew: false, // Se c'è un suggerimento, non è "nuovo" nel senso di completamente sconosciuto
+        isNew: false,
         isExactMatch: false
       };
     }
   }
 
-  // Se la migliore similarità è troppo bassa, consideralo nuovo
-  if (bestMatch.similarity < 0.6) { // Soglia di confidenza bassa per considerarlo nuovo
+  if (bestMatch.similarity < 0.6) {
     bestMatch = {
       name: trimmedName,
       city: undefined,
@@ -181,6 +202,47 @@ const findBestLogisticEntityMatch = (extractedName: string | undefined, suggesti
   return bestMatch;
 };
 
+/**
+ * Trova il miglior match per un cliente convenzionato
+ */
+const findBestClientMatch = async (extractedDescription: string, clients: any[]): Promise<ClientMatchResult> => {
+  if (!extractedDescription || !clients || clients.length === 0) {
+    return {
+      name: extractedDescription || '',
+      similarity: 0,
+      isNew: true
+    };
+  }
+
+  let bestMatch: ClientMatchResult = {
+    name: extractedDescription,
+    similarity: 0,
+    isNew: true
+  };
+
+  for (const client of clients) {
+    const similarity = calculateSimilarity(extractedDescription, client.name);
+    
+    if (similarity > bestMatch.similarity) {
+      bestMatch = {
+        id: client.id,
+        name: client.name,
+        similarity: similarity,
+        isNew: false
+      };
+    }
+  }
+
+  if (bestMatch.similarity < 0.6) {
+    bestMatch = {
+      name: extractedDescription,
+      similarity: 0,
+      isNew: true
+    };
+  }
+
+  return bestMatch;
+};
 
 /**
  * Trova il miglior match per un bacino
@@ -205,11 +267,9 @@ const findBestBasinMatch = async (extractedCode: string, extractedDescription: s
   for (const basin of basins) {
     let similarity = 0;
 
-    // Match esatto per codice bacino
     if (basin.code === extractedCode) {
       similarity = 1.0;
     } else if (extractedDescription && basin.description) {
-      // Match per descrizione se il codice non matcha
       similarity = calculateSimilarity(extractedDescription, basin.description);
     }
 
@@ -224,7 +284,6 @@ const findBestBasinMatch = async (extractedCode: string, extractedDescription: s
     }
   }
 
-  // Se la similarità è troppo bassa, considera come nuovo bacino
   if (bestMatch.similarity < 0.8) {
     bestMatch = {
       code: extractedCode || '',
@@ -238,71 +297,76 @@ const findBestBasinMatch = async (extractedCode: string, extractedDescription: s
 };
 
 /**
- * Esegui il matching di tutti i dati estratti con quelli esistenti nel database (Entità Logistiche e Bacini)
+ * Esegui il matching di tutti i dati estratti
  */
 export const matchExtractedData = async (extractedData: ExtractedPickupOrderData): Promise<MatchingResults> => {
   try {
-    // 1. Ottieni suggerimenti per le entità logistiche (mittente, destinatario, trasportatore, shipper)
+    // 1. Ottieni suggerimenti per le entità logistiche
     const logisticSuggestionsResponse: LogisticMatchingResponse = await api.post('/pickup-orders/ocr/logistics/suggestions', {
       senderName: extractedData.senderName,
       recipientName: extractedData.recipientName,
-      // Invia transporterName e shipperName solo se presenti in extractedData
       transporterName: (extractedData as any).transporter || undefined,
-      shipperName: (extractedData as any).shipperName || undefined,
     }).then(res => res.data);
 
-    // Trova i migliori match per le entità logistiche
+    // 2. Carica clienti e bacini dal database
+    const [clientsResponse, basinsResponse] = await Promise.all([
+      api.get('/clients'),
+      api.get('/basins')
+    ]);
+
+    const clients = clientsResponse.data;
+    const basins = basinsResponse.data;
+
+    // 3. Trova i migliori match
     const senderMatch = findBestLogisticEntityMatch(extractedData.senderName, logisticSuggestionsResponse.senderSuggestions);
     const recipientMatch = findBestLogisticEntityMatch(extractedData.recipientName, logisticSuggestionsResponse.recipientSuggestions);
-
-    // Gestione del trasportatore e dello shipper: findBestLogisticEntityMatch può ora restituire undefined
     const transporterMatch = (extractedData as any).transporter
       ? findBestLogisticEntityMatch((extractedData as any).transporter, logisticSuggestionsResponse.transporterSuggestions || [])
       : undefined;
 
-    const shipperMatch = (extractedData as any).shipperName
-      ? findBestLogisticEntityMatch((extractedData as any).shipperName, logisticSuggestionsResponse.shipperSuggestions || [])
-      : undefined;
-
-    // 2. Carica i bacini dal database
-    const basinsResponse = await api.get('/basins');
-    const basins = basinsResponse.data;
+    const clientMatch = await findBestClientMatch(extractedData.basinDescription || '', clients);
     const basinMatch = await findBestBasinMatch(extractedData.basinCode, extractedData.basinDescription || '', basins);
 
     // Calcola la confidenza complessiva
-    // Includiamo tutti i match rilevanti per il calcolo della confidenza
-    let totalSimilarity = (senderMatch?.similarity || 0) + (recipientMatch?.similarity || 0) + (basinMatch.similarity || 0);
-    let count = 3; // Inizialmente per sender, recipient, basin
+    let totalSimilarity = (senderMatch?.similarity || 0) + (recipientMatch?.similarity || 0) + (clientMatch.similarity || 0) + (basinMatch.similarity || 0);
+    let count = 4;
 
     if (transporterMatch) {
       totalSimilarity += transporterMatch.similarity;
       count++;
     }
-    if (shipperMatch) {
-      totalSimilarity += shipperMatch.similarity;
-      count++;
-    }
 
     const confidence = totalSimilarity / count;
 
-    // Determina se necessita revisione
-    const needsReview = confidence < 0.8 || (senderMatch?.isNew || false) || (recipientMatch?.isNew || false) || basinMatch.isNew || (transporterMatch?.isNew || false) || (shipperMatch?.isNew || false);
+    const needsReview = confidence < 0.8 || 
+      (senderMatch?.isNew || false) || 
+      (recipientMatch?.isNew || false) || 
+      clientMatch.isNew || 
+      basinMatch.isNew || 
+      (transporterMatch?.isNew || false);
 
     return {
-      sender: senderMatch!, // Assumiamo che mittente sia sempre presente e mappato se non è undefined
-      recipient: recipientMatch!, // Assumiamo che destinatario sia sempre presente e mappato
-      transporter: transporterMatch, // Sarà undefined se non estratto
-      shipper: shipperMatch, // Sarà undefined se non estratto
+      sender: senderMatch!,
+      recipient: recipientMatch!,
+      transporter: transporterMatch,
+      client: clientMatch,
       basin: basinMatch,
       confidence,
       needsReview,
       suggestions: {
         alternateSenders: logisticSuggestionsResponse.senderSuggestions.filter((s: LogisticEntitySuggestion) => !s.isExactMatch && s.id !== senderMatch?.id).map((s: LogisticEntitySuggestion) => ({ ...s, isNew: false })),
         alternateRecipients: logisticSuggestionsResponse.recipientSuggestions.filter((s: LogisticEntitySuggestion) => !s.isExactMatch && s.id !== recipientMatch?.id).map((s: LogisticEntitySuggestion) => ({ ...s, isNew: false })),
-        // Includi alternateTransporters solo se transporterMatch è definito e ci sono suggerimenti
         alternateTransporters: transporterMatch ? logisticSuggestionsResponse.transporterSuggestions?.filter((s: LogisticEntitySuggestion) => !s.isExactMatch && s.id !== transporterMatch?.id).map((s: LogisticEntitySuggestion) => ({ ...s, isNew: false })) : [],
-        // Includi alternateShippers solo se shipperMatch è definito e ci sono suggerimenti
-        alternateShippers: shipperMatch ? logisticSuggestionsResponse.shipperSuggestions?.filter((s: LogisticEntitySuggestion) => !s.isExactMatch && s.id !== shipperMatch?.id).map((s: LogisticEntitySuggestion) => ({ ...s, isNew: false })) : [],
+        alternateClients: clients
+          .map((client: any) => ({
+            id: client.id,
+            name: client.name,
+            similarity: calculateSimilarity(extractedData.basinDescription || '', client.name),
+            isNew: false
+          }))
+          .filter((match: ClientMatchResult) => match.similarity > 0.3 && match.id !== clientMatch.id)
+          .sort((a: ClientMatchResult, b: ClientMatchResult) => b.similarity - a.similarity)
+          .slice(0, 5),
         alternateBasins: basins
           .map((basin: any) => ({
             id: basin.id,
@@ -321,14 +385,13 @@ export const matchExtractedData = async (extractedData: ExtractedPickupOrderData
     };
 
   } catch (error) {
-    console.error('Errore durante il matching delle entità logistiche/bacini:', error);
-
-    // Fallback: tutti nuovi e necessitano revisione
+    console.error('Errore durante il matching:', error);
+    
     return {
       sender: { name: extractedData.senderName || '', similarity: 0, isNew: true, isExactMatch: false },
       recipient: { name: extractedData.recipientName || '', similarity: 0, isNew: true, isExactMatch: false },
       transporter: (extractedData as any).transporter ? { name: (extractedData as any).transporter, similarity: 0, isNew: true, isExactMatch: false } : undefined,
-      shipper: (extractedData as any).shipperName ? { name: (extractedData as any).shipperName, similarity: 0, isNew: true, isExactMatch: false } : undefined,
+      client: { name: extractedData.basinDescription || '', similarity: 0, isNew: true },
       basin: { code: extractedData.basinCode || '', description: extractedData.basinDescription || '', similarity: 0, isNew: true },
       confidence: 0,
       needsReview: true,
@@ -336,7 +399,7 @@ export const matchExtractedData = async (extractedData: ExtractedPickupOrderData
         alternateSenders: [],
         alternateRecipients: [],
         alternateTransporters: [],
-        alternateShippers: [],
+        alternateClients: [],
         alternateBasins: []
       }
     };
@@ -344,23 +407,21 @@ export const matchExtractedData = async (extractedData: ExtractedPickupOrderData
 };
 
 /**
- * Crea nuove entità logistiche se necessario
- * Restituisce l'ID dell'entità creata o undefined se non è stata creata (es. nome vuoto)
+ * Crea entità logistica se necessario
  */
 const createLogisticEntityIfNeeded = async (
-  entityMatch: LogisticEntityMatchResult | undefined, // Può essere undefined
+  entityMatch: LogisticEntityMatchResult | undefined,
   originalExtractedData: ExtractedPickupOrderData,
-  entityType: 'sender' | 'recipient' | 'transporter' | 'shipper'
-): Promise<string | undefined> => { // Il tipo di ritorno può essere stringa o undefined
+  entityType: 'sender' | 'recipient' | 'transporter'
+): Promise<string | undefined> => {
   if (!entityMatch) {
-    return undefined; // Nessun match entity, quindi nessun ID
+    return undefined;
   }
 
   if (!entityMatch.isNew && entityMatch.id) {
-    return entityMatch.id; // Entità già esistente e con ID
+    return entityMatch.id;
   }
 
-  // Evita di tentare di creare un'entità con un nome vuoto se è nuova
   if (entityMatch.isNew && (!entityMatch.name || entityMatch.name.trim() === '')) {
     console.warn(`Tentativo di creare un'entità ${entityType} con nome vuoto. Operazione saltata.`);
     return undefined;
@@ -368,7 +429,7 @@ const createLogisticEntityIfNeeded = async (
 
   try {
     const response = await api.post('/pickup-orders/ocr/logistics/auto-create', {
-      [entityType + 'Name']: entityMatch.name, // Invia il nome al server
+      [entityType + 'Name']: entityMatch.name,
       ...(entityType === 'sender' && {
         senderAddress: originalExtractedData.senderAddress,
         senderCity: originalExtractedData.senderCity,
@@ -381,10 +442,9 @@ const createLogisticEntityIfNeeded = async (
         recipientEmail: originalExtractedData.recipientEmail,
         recipientPhone: (originalExtractedData as any).recipientPhone,
       }),
-      type: entityType
     });
 
-    const createdEntity = response.data.createdEntities[entityType.toUpperCase()];
+    const createdEntity = response.data.createdEntities[entityType];
     if (createdEntity && createdEntity.id) {
       return createdEntity.id;
     }
@@ -392,31 +452,30 @@ const createLogisticEntityIfNeeded = async (
 
   } catch (error) {
     console.error(`Errore durante la creazione automatica dell'entità logistica ${entityType}:`, error);
-    // Se la creazione fallisce, restituisci undefined per evitare di bloccare il flusso principale
-    // Questo permette di procedere senza un ID per il trasportatore/shipper se non è critico in questa fase.
     return undefined;
   }
 };
 
-
 /**
- * Crea nuovo bacino se necessario
+ * Converte una data in stringa formato ISO (YYYY-MM-DD)
  */
-const createBasinIfNeeded = async (basinMatch: BasinMatchResult, associatedEntityId: string): Promise<string> => {
-  if (!basinMatch.isNew && basinMatch.id) {
-    return basinMatch.id;
+const convertToISODate = (date: Date | string | undefined): string | undefined => {
+  if (!date) return undefined;
+  
+  if (date instanceof Date) {
+    return date.toISOString().split('T')[0];
   }
-
-  // Crea nuovo bacino
-  const newBasin = {
-    code: basinMatch.code || '',
-    description: basinMatch.description || '',
-    flowType: 'A', // Default, può essere cambiato
-    logisticClientId: associatedEntityId // Associa al mittente logistico per default
-  };
-
-  const response = await api.post('/basins', newBasin);
-  return response.data.id;
+  
+  if (typeof date === 'string') {
+    try {
+      return new Date(date).toISOString().split('T')[0];
+    } catch (e) {
+      console.warn('Errore nella conversione della data:', e);
+      return undefined;
+    }
+  }
+  
+  return undefined;
 };
 
 /**
@@ -431,23 +490,22 @@ export const createPickupOrderFromExtractedData = async (
     // Applica le correzioni manuali
     const finalData = { ...extractedData, ...corrections };
 
-    // Validazione dati obbligatori (mittente, destinatario, numero ordine)
+    // Validazione dati obbligatori
     if (!finalData.orderNumber || !finalData.senderName || !finalData.recipientName) {
       const errors: string[] = [];
       if (!finalData.orderNumber) errors.push('Il numero del buono di ritiro è obbligatorio.');
       if (!finalData.senderName) errors.push('Il mittente è obbligatorio.');
       if (!finalData.recipientName) errors.push('Il destinatario è obbligatorio.');
 
-      // Creare un matchingResults di fallback per visualizzare gli errori
       const fallbackMatchingResults: MatchingResults = {
         sender: { name: finalData.senderName || '', similarity: 0, isNew: true, isExactMatch: false },
         recipient: { name: finalData.recipientName || '', similarity: 0, isNew: true, isExactMatch: false },
         transporter: (finalData as any).transporter ? { name: (finalData as any).transporter, similarity: 0, isNew: true, isExactMatch: false } : undefined,
-        shipper: (finalData as any).shipperName ? { name: (finalData as any).shipperName, similarity: 0, isNew: true, isExactMatch: false } : undefined,
+        client: { name: finalData.basinDescription || '', similarity: 0, isNew: true },
         basin: { code: finalData.basinCode || '', description: finalData.basinDescription || '', similarity: 0, isNew: true },
         confidence: 0,
         needsReview: true,
-        suggestions: { alternateSenders: [], alternateRecipients: [], alternateTransporters: [], alternateShippers: [], alternateBasins: [] }
+        suggestions: { alternateSenders: [], alternateRecipients: [], alternateTransporters: [], alternateClients: [], alternateBasins: [] }
       };
 
       return {
@@ -458,10 +516,10 @@ export const createPickupOrderFromExtractedData = async (
       };
     }
 
-    // Esegui il matching per tutte le entità (logistiche e bacino)
+    // Esegui il matching
     const matchingResults = await matchExtractedData(finalData);
 
-    // Se necessita revisione e non è forzata la creazione, restituisci i risultati del matching
+    // Se necessita revisione e non è forzata la creazione
     if (matchingResults.needsReview && !forceCreate) {
       return {
         success: false,
@@ -470,46 +528,104 @@ export const createPickupOrderFromExtractedData = async (
       };
     }
 
-    // Crea entità logistiche e bacini se necessario.
-    // createLogisticEntityIfNeeded ora restituisce undefined se il nome è vuoto.
-    const senderLogisticId = await createLogisticEntityIfNeeded(matchingResults.sender, finalData, 'sender');
-    const recipientLogisticId = await createLogisticEntityIfNeeded(matchingResults.recipient, finalData, 'recipient');
-    const transporterLogisticId = await createLogisticEntityIfNeeded(matchingResults.transporter, finalData, 'transporter');
-    const shipperLogisticId = await createLogisticEntityIfNeeded(matchingResults.shipper, finalData, 'shipper');
+    // PRIMO: Trova cliente e bacino esistenti
+    let finalClientId: string | undefined;
+    let basinId: string | undefined;
 
-    // Assicurati che mittente e destinatario abbiano ID validi prima di proseguire
-    if (!senderLogisticId || !recipientLogisticId) {
+    try {
+      const basinsResponse = await api.get('/basins');
+      const basins = basinsResponse.data;
+
+      const foundBasin = basins.find((basin: any) => 
+        basin.code === finalData.basinCode
+      );
+
+      if (foundBasin) {
+        basinId = foundBasin.id;
+        finalClientId = foundBasin.clientId;
+        console.log(`✅ Bacino trovato: ${foundBasin.code} (Cliente: ${finalClientId})`);
+      } else {
+        if (basins.length > 0) {
+          basinId = basins[0].id;
+          finalClientId = basins[0].clientId;
+          console.warn(`⚠️ Bacino ${finalData.basinCode} non trovato, usando fallback: ${basins[0].code}`);
+        } else {
+          return {
+            success: false,
+            matchingResults,
+            message: 'Nessun bacino disponibile nel sistema.',
+            errors: ['Configurare almeno un bacino nel sistema prima di procedere.']
+          };
+        }
+      }
+
+    } catch (error) {
+      console.error('❌ Errore nel recupero bacini:', error);
       return {
         success: false,
         matchingResults,
-        message: 'Impossibile determinare gli ID per mittente o destinatario, impossibile creare il buono di ritiro.',
-        errors: ['ID mittente o destinatario non disponibili.']
+        message: 'Errore nel recupero dei bacini dal sistema.',
+        errors: ['Impossibile accedere ai bacini esistenti.']
       };
     }
 
-    // Il bacino viene associato al mittente logistico
-    const basinId = await createBasinIfNeeded(matchingResults.basin, senderLogisticId);
+    // SECONDO: Crea entità logistiche se necessario
+    const logisticSenderId = await createLogisticEntityIfNeeded(matchingResults.sender, finalData, 'sender');
+    const logisticRecipientId = await createLogisticEntityIfNeeded(matchingResults.recipient, finalData, 'recipient');
+    const logisticTransporterId = await createLogisticEntityIfNeeded(matchingResults.transporter, finalData, 'transporter');
 
+    // Controllo finale ID
+    if (!basinId) {
+      return {
+        success: false,
+        matchingResults,
+        message: 'Impossibile determinare il bacino per il buono di ritiro.',
+        errors: ['ID bacino non disponibile.']
+      };
+    }
 
-    // Prepara i dati per la creazione del buono di ritiro
+    if (!logisticSenderId || !logisticRecipientId) {
+      return {
+        success: false,
+        matchingResults,
+        message: 'Impossibile creare le entità logistiche (mittente/destinatario).',
+        errors: ['Verificare la configurazione delle entità logistiche.']
+      };
+    }
+
+    // TERZO: Prepara i dati per la creazione del buono di ritiro
     const pickupOrderData: CreatePickupOrderData = {
       orderNumber: finalData.orderNumber,
-      issueDate: finalData.issueDate instanceof Date
-        ? finalData.issueDate.toISOString().split('T')[0]
-        : (finalData.issueDate?.toString() || new Date().toISOString().split('T')[0]),
-      scheduledDate: finalData.loadingDate instanceof Date
-        ? finalData.loadingDate.toISOString().split('T')[0]
-        : undefined,
-      logisticSenderId: senderLogisticId,
-      logisticRecipientId: recipientLogisticId,
-      logisticTransporterId: transporterLogisticId, // Sarà undefined se non estratto/creato
-      logisticShipperId: shipperLogisticId,         // Sarà undefined se non estratto/creato
-      basinId,
+      issueDate: convertToISODate(finalData.issueDate) || new Date().toISOString().split('T')[0],
+      
+      // Date opzionali - gestione completa
+      scheduledDate: convertToISODate(finalData.scheduledDate),
+      loadingDate: convertToISODate(finalData.loadingDate),
+      unloadingDate: convertToISODate(finalData.unloadingDate), // QUESTO ERA MANCANTE!
+      
+      // Entità logistiche
+      logisticSenderId: logisticSenderId,
+      logisticRecipientId: logisticRecipientId,
+      logisticTransporterId: logisticTransporterId,
+      
+      // Cliente e bacino
+      clientId: finalClientId,
+      basinId: basinId,
+      
+      // Altri dati
       flowType: finalData.flowType || 'A',
       distanceKm: finalData.distanceKm,
-      status: 'PENDING',
+      materialType: (finalData as any).materialType,
+      
+      status: 'DA_EVADERE',
+      
+      // Quantità
+      expectedQuantity: finalData.expectedQuantity,
+      
       notes: `Creato automaticamente da PDF. Confidenza: ${Math.round(matchingResults.confidence * 100)}%`
     };
+
+    console.log('Dati buono di ritiro completi da creare:', pickupOrderData);
 
     // Crea il buono di ritiro
     const response = await api.post('/pickup-orders', pickupOrderData);
@@ -524,18 +640,17 @@ export const createPickupOrderFromExtractedData = async (
   } catch (error: any) {
     console.error('Errore nella creazione del buono di ritiro:', error);
 
-    // Gestione degli errori, assicurandosi che i campi opzionali siano undefined
     return {
       success: false,
       matchingResults: {
         sender: { name: extractedData.senderName || '', similarity: 0, isNew: true, isExactMatch: false },
         recipient: { name: extractedData.recipientName || '', similarity: 0, isNew: true, isExactMatch: false },
         transporter: (extractedData as any).transporter ? { name: (extractedData as any).transporter, similarity: 0, isNew: true, isExactMatch: false } : undefined,
-        shipper: (extractedData as any).shipperName ? { name: (extractedData as any).shipperName, similarity: 0, isNew: true, isExactMatch: false } : undefined,
-        basin: { code: extractedData.basinCode || '', description: extractedData.basinDescription, similarity: 0, isNew: true },
+        client: { name: extractedData.basinDescription || '', similarity: 0, isNew: true },
+        basin: { code: extractedData.basinCode || '', description: extractedData.basinDescription || '', similarity: 0, isNew: true },
         confidence: 0,
         needsReview: true,
-        suggestions: { alternateSenders: [], alternateRecipients: [], alternateTransporters: [], alternateShippers: [], alternateBasins: [] }
+        suggestions: { alternateSenders: [], alternateRecipients: [], alternateTransporters: [], alternateClients: [], alternateBasins: [] }
       },
       message: 'Errore durante la creazione del buono di ritiro',
       errors: [error.response?.data?.message || error.message || 'Errore sconosciuto']
