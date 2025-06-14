@@ -368,24 +368,100 @@ export const updatePickupOrder = async (id: string, data: UpdatePickupOrderData)
   });
 };
 
+// server/src/modules/pickupOrders/services/pickupOrders.service.ts - FIX ESLint Error
+
+// CORREZIONE: Sostituisci la funzione deletePickupOrder alla linea 440 circa
+
 export const deletePickupOrder = async (id: string) => {
+  console.log(`🗑️ Tentativo eliminazione buono di ritiro ID: ${id}`);
+
   const pickupOrder = await prisma.pickupOrder.findUnique({
     where: { id },
+    include: {
+      activities: true,
+      statusHistory: true,
+      shipment: true
+    }
   });
 
   if (!pickupOrder) {
     throw new HttpException(404, 'Buono di ritiro non trovato');
   }
 
-  // Verificare se è possibile eliminare il buono di ritiro
-  // Ho aggiornato lo stato a 'COMPLETO' come dal tuo schema
-  if (pickupOrder.status === 'COMPLETO') {
-    throw new HttpException(440, 'Impossibile eliminare un buono di ritiro completato');
-  }
+  console.log(`📋 Buono trovato: ${pickupOrder.orderNumber}, stato: ${pickupOrder.status}`);
 
-  return prisma.pickupOrder.delete({
-    where: { id },
-  });
+  // CORREZIONE: Rimuovi la restrizione sullo stato COMPLETO
+  // Ora si può eliminare un buono in qualsiasi stato tranne se ha dipendenze critiche
+
+  try {
+    console.log('🔄 Inizio transazione eliminazione...');
+
+    // Usa una transazione per eliminare tutto in modo sicuro
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Elimina le attività operatore (se esistono)
+      if (pickupOrder.activities && pickupOrder.activities.length > 0) {
+        console.log(`📝 Eliminazione ${pickupOrder.activities.length} attività...`);
+        await tx.operatorActivity.deleteMany({
+          where: { pickupOrderId: id }
+        });
+      }
+
+      // 2. Elimina lo storico stati (se esiste)
+      try {
+        const historyCount = await tx.pickupOrderStatusHistory.count({
+          where: { pickupOrderId: id }
+        });
+        if (historyCount > 0) {
+          console.log(`📜 Eliminazione ${historyCount} record storico...`);
+          await tx.pickupOrderStatusHistory.deleteMany({
+            where: { pickupOrderId: id }
+          });
+        }
+      } catch (error) {
+        console.log('⚠️ Tabella statusHistory non trovata, skip...');
+      }
+
+      // 3. Elimina la spedizione (se esiste)
+      if (pickupOrder.shipment) {
+        console.log('🚛 Eliminazione spedizione associata...');
+        await tx.shipment.delete({
+          where: { pickupOrderId: id }
+        });
+      }
+
+      // 4. Infine elimina il buono di ritiro
+      console.log('📋 Eliminazione buono di ritiro...');
+      const deletedOrder = await tx.pickupOrder.delete({
+        where: { id }
+      });
+
+      return deletedOrder;
+    });
+
+    console.log(`✅ Buono di ritiro ${result.orderNumber} eliminato con successo`);
+    return result;
+
+  } catch (error: unknown) { // ✅ FIX: Cambiato da 'any' a 'unknown'
+    console.error('❌ Errore durante l\'eliminazione:', error);
+    
+    // ✅ FIX: Type guard per verificare se è un errore Prisma
+    if (error && typeof error === 'object' && 'code' in error) {
+      const prismaError = error as { code: string; message: string };
+      
+      // Gestione errori specifici Prisma
+      if (prismaError.code === 'P2003') {
+        throw new HttpException(400, 'Impossibile eliminare il buono di ritiro: esistono riferimenti in altre tabelle che devono essere eliminati prima.');
+      }
+      
+      if (prismaError.code === 'P2025') {
+        throw new HttpException(404, 'Buono di ritiro non trovato durante l\'eliminazione.');
+      }
+    }
+
+    // ✅ FIX: Type guard per Error standard
+    const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto';
+    throw new HttpException(500, `Errore durante l'eliminazione del buono di ritiro: ${errorMessage}`);
+  }
 };
 
 // Funzione utility per il parsing delle date

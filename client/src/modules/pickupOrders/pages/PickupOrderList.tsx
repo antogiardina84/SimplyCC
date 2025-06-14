@@ -145,7 +145,7 @@ const PickupOrderList = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Numero Buono</TableCell>
-                <TableCell>Data Carico</TableCell> {/* CAMBIATO: da "Data Emissione" a "Data Carico" */}
+                <TableCell>Data Carico</TableCell>
                 <TableCell>Mittente</TableCell>
                 <TableCell>Destinatario</TableCell>
                 <TableCell>Bacino</TableCell>
@@ -166,14 +166,12 @@ const PickupOrderList = () => {
                   <TableRow key={order.id}>
                     <TableCell>{order.orderNumber}</TableCell>
                     <TableCell>
-                      {/* CORRETTO: Mostra loadingDate se presente, altrimenti scheduledDate, altrimenti issueDate */}
                       {order.loadingDate 
                         ? format(new Date(order.loadingDate), 'dd/MM/yyyy', { locale: it })
                         : order.scheduledDate 
                           ? format(new Date(order.scheduledDate), 'dd/MM/yyyy', { locale: it })
                           : format(new Date(order.issueDate), 'dd/MM/yyyy', { locale: it })}
                     </TableCell>
-                    {/* CORRETTO: Usa le entità logistiche */}
                     <TableCell>{order.logisticSender?.name || 'N/A'}</TableCell>
                     <TableCell>{order.logisticRecipient?.name || 'N/A'}</TableCell>
                     <TableCell>

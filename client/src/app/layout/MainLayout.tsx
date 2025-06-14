@@ -27,6 +27,9 @@ import {
   Group,
   Domain,
   Add,
+  CalendarToday,
+  PersonPin,
+  CheckCircle,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -120,7 +123,23 @@ const menuItems: MenuItem[] = [
   {
     text: 'Spedizioni',
     icon: <LocalShipping />,
-    path: '/shipments',
+    children: [
+      {
+        text: 'Calendario Spedizioni',
+        icon: <CalendarToday />,
+        path: '/shipments/calendar',
+      },
+      {
+        text: 'Dashboard Operatore',
+        icon: <PersonPin />,
+        path: '/shipments/operator',
+      },
+      {
+        text: 'Finalizzazione Manager',
+        icon: <CheckCircle />,
+        path: '/shipments/manager',
+      },
+    ],
   },
   {
     text: 'Analisi',
@@ -142,10 +161,10 @@ const menuItems: MenuItem[] = [
 const MainLayout = ({ children }: MainLayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const isMobile = useMediaQuery('(max-width: 1199px)'); // Breakpoint più preciso
+  const isMobile = useMediaQuery('(max-width: 1199px)');
   
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [expandedItems, setExpandedItems] = useState<string[]>(['Clienti & Bacini', 'Buoni di Ritiro']);
+  const [expandedItems, setExpandedItems] = useState<string[]>(['Clienti & Bacini', 'Buoni di Ritiro', 'Spedizioni']);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -165,6 +184,11 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     return location.pathname.startsWith(path) && path !== '/';
   };
 
+  const handleNavigation = (path: string) => {
+    navigate(path);
+    if (isMobile) setMobileOpen(false);
+  };
+
   const renderMenuItem = (item: MenuItem, depth = 0) => {
     const hasChildren = item.children && item.children.length > 0;
     const isExpanded = expandedItems.includes(item.text);
@@ -179,8 +203,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
               if (hasChildren) {
                 handleExpandClick(item.text);
               } else if (item.path) {
-                navigate(item.path);
-                if (isMobile) setMobileOpen(false);
+                handleNavigation(item.path);
               }
             }}
             sx={{
@@ -243,7 +266,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Mobile menu button - SEMPRE VISIBILE */}
+      {/* Mobile menu button */}
       <IconButton
         color="inherit"
         aria-label="open drawer"
@@ -253,7 +276,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           position: 'fixed',
           top: 10,
           left: 10,
-          zIndex: 9999, // Z-index molto alto
+          zIndex: 9999,
           backgroundColor: '#666666 !important',
           color: 'white !important',
           width: 50,
@@ -264,7 +287,6 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           '&:hover': {
             backgroundColor: '#555555 !important',
           },
-          // Forza la visibilità
           visibility: 'visible !important',
           opacity: '1 !important',
         }}

@@ -32,6 +32,13 @@ router.get('/stats', checkRole(['MANAGER', 'ADMIN']), shipmentController.getShip
 router.get('/operators', shipmentController.getAvailableOperators);
 
 /**
+ * GET /shipments/operator-dashboard - Dashboard operatore
+ * Restituisce ordini per la dashboard operatore divisi per stato
+ * Accessibile a: OPERATOR, MANAGER, ADMIN
+ */
+router.get('/operator-dashboard', checkRole(['OPERATOR', 'MANAGER', 'ADMIN']), shipmentController.getOperatorDashboard);
+
+/**
  * GET /shipments/date/:date - Spedizioni per data specifica
  * Params: date (YYYY-MM-DD)
  */
@@ -98,6 +105,13 @@ router.post('/:id/start', checkRole(['MANAGER', 'ADMIN']), shipmentController.st
  * Accessibile a: MANAGER, ADMIN
  */
 router.post('/:id/assign', checkRole(['MANAGER', 'ADMIN']), shipmentController.assignOperator);
+
+/**
+ * POST /shipments/:id/start-loading - Alias per auto-assegnazione operatore
+ * IN_EVASIONE → IN_CARICO (con auto-assegnazione dell'operatore corrente)
+ * Accessibile a: OPERATOR, MANAGER, ADMIN
+ */
+router.post('/:id/start-loading', checkRole(['OPERATOR', 'MANAGER', 'ADMIN']), shipmentController.startLoadingWithAutoAssign);
 
 /**
  * POST /shipments/:id/complete-loading - Completa carico

@@ -1,3 +1,5 @@
+// client/src/app/routes/routes.ts - AGGIORNATO
+
 import { type ComponentType, lazy } from 'react';
 
 // Lazy import per le pagine esistenti
@@ -22,7 +24,12 @@ const Profile = lazy(() => import('../../modules/profile/pages/Profile'));
 const PickupOrderList = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderList'));
 const PickupOrderForm = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderForm'));
 const PickupOrderDetail = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderDetail'));
-const PickupOrderUpload = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderUpload')); // <-- aggiunta
+const PickupOrderUpload = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderUpload'));
+
+// === NUOVE PAGINE SPEDIZIONI ===
+const ShipmentCalendar = lazy(() => import('../../modules/shipments/pages/ShipmentCalendar'));
+const ShipmentOperatorDashboard = lazy(() => import('../../modules/shipments/pages/ShipmentOperatorDashboard'));
+const ManagerFinalization = lazy(() => import('../../modules/shipments/pages/ManagerFinalization'));
 
 // Placeholder per pagine non ancora implementate
 const PlaceholderPage = lazy(() => import('../../core/components/PlaceholderPage'));
@@ -93,7 +100,7 @@ export const routes: RouteConfig[] = [
     protected: true,
   },
   {
-    path: '/pickup-orders/upload',   // <-- nuova rotta upload
+    path: '/pickup-orders/upload',
     element: PickupOrderUpload,
     protected: true,
   },
@@ -125,6 +132,30 @@ export const routes: RouteConfig[] = [
     protected: true,
   },
 
+  // === NUOVE ROUTES SPEDIZIONI ===
+  {
+    path: '/shipments/calendar',
+    element: ShipmentCalendar,
+    protected: true,
+  },
+  {
+    path: '/shipments/operator',
+    element: ShipmentOperatorDashboard, // CORRETTO
+    protected: true,
+  },
+  {
+    path: '/shipments/manager',
+    element: ManagerFinalization,
+    protected: true,
+  },
+  // Mantieni la route originale per compatibilità
+  {
+    path: '/shipments',
+    element: ShipmentCalendar, // Reindirizza al calendario come default
+    protected: true,
+  },
+
+  // Altre pagine placeholder
   {
     path: '/deliveries',
     element: PlaceholderPage,
@@ -132,11 +163,6 @@ export const routes: RouteConfig[] = [
   },
   {
     path: '/processing',
-    element: PlaceholderPage,
-    protected: true,
-  },
-  {
-    path: '/shipments',
     element: PlaceholderPage,
     protected: true,
   },
