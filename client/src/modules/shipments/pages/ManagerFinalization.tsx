@@ -1,4 +1,4 @@
-// client/src/modules/shipments/pages/ManagerFinalization.tsx
+// client/src/modules/shipments/pages/ManagerFinalization.tsx - CORRETTO
 
 import { useState, useEffect } from 'react';
 import {
@@ -33,43 +33,47 @@ import {
   CheckCircle,
   Refresh,
   Visibility
-} from '@mui/icons-material'; // Removed unused: Schedule, LocalShipping, Scale, Assignment, Warning, Edit
+} from '@mui/icons-material';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import api from '../../../core/services/api';
-import * as shipmentService from '../services/shipmentService';
 
+// ✅ INTERFACCIA CORRETTA - Allineata con il database schema
 interface PendingOrder {
   id: string;
   orderNumber: string;
   status: string;
-  scheduledDate?: string;
-  loadingDate?: string;
-  completionDate?: string;
-  basin: {
-    code: string;
-    client: {
+  // Campi nested dal pickupOrder
+  pickupOrder?: {
+    scheduledDate?: string;
+    loadingDate?: string;
+    completionDate?: string;
+    unloadingDate?: string;
+    departureWeight?: number;
+    arrivalWeight?: number;
+    loadedPackages?: number;
+    expectedQuantity?: number;
+    actualQuantity?: number;
+    basin: {
+      code: string;
+      client: {
+        name: string;
+      };
+    };
+    logisticSender?: {
       name: string;
     };
+    logisticRecipient?: {
+      name: string;
+    };
+    assignedOperator?: {
+      firstName: string;
+      lastName: string;
+    };
+    notes?: string;
+    isRejected?: boolean;
+    rejectionReason?: string;
   };
-  logisticSender?: {
-    name: string;
-  };
-  logisticRecipient?: {
-    name: string;
-  };
-  assignedOperator?: {
-    firstName: string;
-    lastName: string;
-  };
-  expectedQuantity?: number;
-  actualQuantity?: number;
-  departureWeight?: number;
-  arrivalWeight?: number;
-  loadedPackages?: number;
-  notes?: string;
-  isRejected?: boolean;
-  rejectionReason?: string;
 }
 
 interface FinalizationData {
@@ -144,7 +148,7 @@ const ManagerFinalization = () => {
   const handleFinalize = (order: PendingOrder) => {
     setSelectedOrder(order);
     setFinalizationData({
-      departureWeight: order.actualQuantity?.toString() || '',
+      departureWeight: order.pickupOrder?.actualQuantity?.toString() || '',
       notes: ''
     });
     setFinalizeDialog(true);
@@ -153,7 +157,7 @@ const ManagerFinalization = () => {
   const handleComplete = (order: PendingOrder) => {
     setSelectedOrder(order);
     setCompletionData({
-      arrivalWeight: order.departureWeight?.toString() || '',
+      arrivalWeight: order.pickupOrder?.departureWeight?.toString() || '',
       isRejected: false,
       rejectionReason: '',
       notes: ''
@@ -241,18 +245,37 @@ const ManagerFinalization = () => {
     });
   };
 
-  const getStatusColor = (status: string) => {
-    return shipmentService.getStatusColor(status);
+  // ✅ FUNZIONI DI UTILITÀ SEMPLICI - Senza dipendenze esterne
+  const getStatusColor = (status: string): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
+    switch (status) {
+      case 'SPEDITO':
+        return 'info';
+      case 'COMPLETO':
+        return 'success';
+      case 'CARICATO':
+        return 'warning';
+      default:
+        return 'default';
+    }
   };
 
-  const getStatusLabel = (status: string) => {
-    return shipmentService.formatStatus(status);
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'SPEDITO':
+        return 'Spedito';
+      case 'COMPLETO':
+        return 'Completato';
+      case 'CARICATO':
+        return 'Caricato';
+      default:
+        return status;
+    }
   };
 
   const getTodayStats = () => {
     const today = format(new Date(), 'yyyy-MM-dd');
     const todayFinalized = shippedOrders.filter(order =>
-      order.completionDate && order.completionDate.startsWith(today)
+      order.pickupOrder?.completionDate && order.pickupOrder.completionDate.startsWith(today)
     ).length;
 
     return {
@@ -282,6 +305,7 @@ const ManagerFinalization = () => {
         </Box>
 
         {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+        
         {/* Statistiche */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={4}>
@@ -314,9 +338,11 @@ const ManagerFinalization = () => {
           {/* Ordini da Finalizzare */}
           <Grid item xs={12} lg={7}>
             <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}> 📦 Ordini Pronti per Finalizzazione ({pendingOrders.length}) </Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                📦 Ordini Pronti per Finalizzazione ({pendingOrders.length})
+              </Typography>
               {pendingOrders.length === 0 ? (
-                <Alert severity="info"> Nessun ordine in attesa di finalizzazione </Alert>
+                <Alert severity="info">Nessun ordine in attesa di finalizzazione</Alert>
               ) : (
                 <TableContainer>
                   <Table>
@@ -336,25 +362,31 @@ const ManagerFinalization = () => {
                           <TableCell>
                             <Typography variant="subtitle2">{order.orderNumber}</Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {order.basin?.code || 'N/D'}
+                              {order.pickupOrder?.basin?.code || 'N/D'}
                             </Typography>
                           </TableCell>
-                          <TableCell>{order.basin?.client?.name || 'N/D'}</TableCell>
+                          <TableCell>{order.pickupOrder?.basin?.client?.name || 'N/D'}</TableCell>
                           <TableCell>
-                            {order.assignedOperator ? `${order.assignedOperator.firstName || ''} ${order.assignedOperator.lastName || ''}` : '-'}
+                            {order.pickupOrder?.assignedOperator ? 
+                              `${order.pickupOrder.assignedOperator.firstName || ''} ${order.pickupOrder.assignedOperator.lastName || ''}` : 
+                              '-'
+                            }
                           </TableCell>
                           <TableCell>
-                            {order.loadingDate ? format(new Date(order.loadingDate), 'dd/MM HH:mm') : '-'}
+                            {order.pickupOrder?.loadingDate ? 
+                              format(new Date(order.pickupOrder.loadingDate), 'dd/MM HH:mm') : 
+                              '-'
+                            }
                           </TableCell>
-                          <TableCell>{order.loadedPackages || '-'}</TableCell>
+                          <TableCell>{order.pickupOrder?.loadedPackages || '-'}</TableCell>
                           <TableCell>
                             <Tooltip title="Finalizza Spedizione">
-                              <IconButton onClick={() => handleFinalize(order)} color="success" size="small" >
+                              <IconButton onClick={() => handleFinalize(order)} color="success" size="small">
                                 <CheckCircle />
                               </IconButton>
                             </Tooltip>
                             <Tooltip title="Dettagli">
-                              <IconButton onClick={() => window.open(`/pickup-orders/${order.id}`, '_blank')} size="small" >
+                              <IconButton onClick={() => window.open(`/pickup-orders/${order.id}`, '_blank')} size="small">
                                 <Visibility />
                               </IconButton>
                             </Tooltip>
@@ -371,9 +403,11 @@ const ManagerFinalization = () => {
           {/* Spediti - In Attesa di Conferma */}
           <Grid item xs={12} lg={5}>
             <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}> 🚛 Spediti - In Attesa Conferma ({shippedOrders.length}) </Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                🚛 Spediti - In Attesa Conferma ({shippedOrders.length})
+              </Typography>
               {shippedOrders.length === 0 ? (
-                <Alert severity="info"> Nessuna spedizione in attesa di conferma </Alert>
+                <Alert severity="info">Nessuna spedizione in attesa di conferma</Alert>
               ) : (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: '400px', overflow: 'auto' }}>
                   {shippedOrders.map((order) => (
@@ -381,28 +415,28 @@ const ManagerFinalization = () => {
                       <CardContent sx={{ p: 2 }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                           <Typography variant="subtitle1">{order.orderNumber}</Typography>
-                          <Chip label={getStatusLabel(order.status)} color={getStatusColor(order.status) as any} size="small" />
+                          <Chip label={getStatusLabel(order.status)} color={getStatusColor(order.status)} size="small" />
                         </Box>
                         <Typography variant="body2" color="text.secondary">
-                          Cliente: {order.basin?.client?.name || 'N/D'}
+                          Cliente: {order.pickupOrder?.basin?.client?.name || 'N/D'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Bacino: {order.basin?.code || 'N/D'}
+                          Bacino: {order.pickupOrder?.basin?.code || 'N/D'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Mittente: {order.logisticSender?.name || 'N/D'}
+                          Mittente: {order.pickupOrder?.logisticSender?.name || 'N/D'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          Destinatario: {order.logisticRecipient?.name || 'N/D'}
+                          Destinatario: {order.pickupOrder?.logisticRecipient?.name || 'N/D'}
                         </Typography>
-                        {order.departureWeight && (
+                        {order.pickupOrder?.departureWeight && (
                           <Typography variant="body2" color="text.secondary">
-                            Peso Partenza: {order.departureWeight} t
+                            Peso Partenza: {order.pickupOrder.departureWeight} t
                           </Typography>
                         )}
-                        {order.loadingDate && (
+                        {order.pickupOrder?.loadingDate && (
                           <Typography variant="body2" color="text.secondary">
-                            Caricato il: {format(new Date(order.loadingDate), 'dd/MM/yyyy HH:mm', { locale: it })}
+                            Caricato il: {format(new Date(order.pickupOrder.loadingDate), 'dd/MM/yyyy HH:mm', { locale: it })}
                           </Typography>
                         )}
                       </CardContent>
@@ -440,13 +474,16 @@ const ManagerFinalization = () => {
           {selectedOrder && (
             <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Typography variant="body1">
-                Cliente: {selectedOrder.basin?.client?.name || 'N/D'} ({selectedOrder.basin?.code || 'N/D'})
+                Cliente: {selectedOrder.pickupOrder?.basin?.client?.name || 'N/D'} ({selectedOrder.pickupOrder?.basin?.code || 'N/D'})
               </Typography>
               <Typography variant="body2">
-                Operatore Assegnato: {selectedOrder.assignedOperator ? `${selectedOrder.assignedOperator.firstName || ''} ${selectedOrder.assignedOperator.lastName || ''}` : 'N/D'}
+                Operatore Assegnato: {selectedOrder.pickupOrder?.assignedOperator ? 
+                  `${selectedOrder.pickupOrder.assignedOperator.firstName || ''} ${selectedOrder.pickupOrder.assignedOperator.lastName || ''}` : 
+                  'N/D'
+                }
               </Typography>
               <Typography variant="body2">
-                Colli Caricati: {selectedOrder.loadedPackages || 'N/D'}
+                Colli Caricati: {selectedOrder.pickupOrder?.loadedPackages || 'N/D'}
               </Typography>
               <TextField
                 label="Peso di Partenza (t)"
@@ -495,10 +532,10 @@ const ManagerFinalization = () => {
           {selectedOrder && (
             <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Typography variant="body1">
-                Cliente: {selectedOrder.basin?.client?.name || 'N/D'} ({selectedOrder.basin?.code || 'N/D'})
+                Cliente: {selectedOrder.pickupOrder?.basin?.client?.name || 'N/D'} ({selectedOrder.pickupOrder?.basin?.code || 'N/D'})
               </Typography>
               <Typography variant="body2">
-                Peso Partenza Registrato: {selectedOrder.departureWeight || 'N/D'} t
+                Peso Partenza Registrato: {selectedOrder.pickupOrder?.departureWeight || 'N/D'} t
               </Typography>
 
               <FormControlLabel
@@ -508,7 +545,7 @@ const ManagerFinalization = () => {
                     onChange={(e) => setCompletionData(prev => ({
                       ...prev,
                       isRejected: e.target.checked,
-                      arrivalWeight: e.target.checked ? '' : prev.arrivalWeight // Clear arrival weight if rejected
+                      arrivalWeight: e.target.checked ? '' : prev.arrivalWeight
                     }))}
                     name="isRejected"
                     color="error"

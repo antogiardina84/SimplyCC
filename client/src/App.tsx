@@ -1,3 +1,5 @@
+// client/src/App.tsx - VERSIONE COMPLETA CORRETTA
+
 import { useLocation } from 'react-router-dom';
 import { Box } from '@mui/material';
 import AppProviders from './app/providers/AppProviders';

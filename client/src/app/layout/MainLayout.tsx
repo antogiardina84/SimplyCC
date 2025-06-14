@@ -135,6 +135,11 @@ const menuItems: MenuItem[] = [
         path: '/shipments/operator',
       },
       {
+        text: 'Storico Spedizioni', // 
+        icon: <Assessment />,
+        path: '/shipments/history',
+      },
+      {
         text: 'Finalizzazione Manager',
         icon: <CheckCircle />,
         path: '/shipments/manager',

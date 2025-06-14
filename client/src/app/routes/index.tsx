@@ -1,6 +1,6 @@
-// client/src/app/routes/index.tsx
+// client/src/app/routes/index.tsx - ROUTES COMPLETE CORRETTE
 
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { CircularProgress, Box } from '@mui/material';
 import ProtectedRoute from './ProtectedRoute';
@@ -28,23 +28,90 @@ const ClientDetail = lazy(() => import('../../modules/clients/pages/ClientDetail
 const BasinList = lazy(() => import('../../modules/basins/pages/BasinList'));
 const BasinForm = lazy(() => import('../../modules/basins/pages/BasinForm'));
 
-// === SPEDIZIONI - Import con gestione errori ===
+// ✅ SPEDIZIONI - Import con gestione errori dettagliata
 const ShipmentCalendar = lazy(() => 
-  import('../../modules/shipments/pages/ShipmentCalendar').catch(() => 
-    ({ default: () => <div>⚠️ ShipmentCalendar non trovato. Controlla che il file esista in: client/src/modules/shipments/pages/ShipmentCalendar.tsx</div> })
-  )
+  import('../../modules/shipments/pages/ShipmentCalendar')
+    .then(module => ({ default: module.default }))
+    .catch(err => {
+      console.error('Errore caricamento ShipmentCalendar:', err);
+      return { 
+        default: () => (
+          <Box sx={{ p: 3 }}>
+            <h2>⚠️ ShipmentCalendar non disponibile</h2>
+            <p>File non trovato: client/src/modules/shipments/pages/ShipmentCalendar.tsx</p>
+            <p>Errore: {err.message}</p>
+          </Box>
+        )
+      };
+    })
 );
 
 const ShipmentOperatorDashboard = lazy(() => 
-  import('../../modules/shipments/pages/ShipmentOperatorDashboard').catch(() => 
-    ({ default: () => <div>⚠️ ShipmentOperatorDashboard non trovato. Controlla che il file esista in: client/src/modules/shipments/pages/ShipmentOperatorDashboard.tsx</div> })
-  )
+  import('../../modules/shipments/pages/ShipmentOperatorDashboard')
+    .then(module => ({ default: module.default }))
+    .catch(err => {
+      console.error('Errore caricamento ShipmentOperatorDashboard:', err);
+      return { 
+        default: () => (
+          <Box sx={{ p: 3 }}>
+            <h2>⚠️ ShipmentOperatorDashboard non disponibile</h2>
+            <p>File non trovato: client/src/modules/shipments/pages/ShipmentOperatorDashboard.tsx</p>
+            <p>Errore: {err.message}</p>
+          </Box>
+        )
+      };
+    })
 );
 
 const ManagerFinalization = lazy(() => 
-  import('../../modules/shipments/pages/ManagerFinalization').catch(() => 
-    ({ default: () => <div>⚠️ ManagerFinalization non trovato. Controlla che il file esista in: client/src/modules/shipments/pages/ManagerFinalization.tsx</div> })
-  )
+  import('../../modules/shipments/pages/ManagerFinalization')
+    .then(module => ({ default: module.default }))
+    .catch(err => {
+      console.error('Errore caricamento ManagerFinalization:', err);
+      return { 
+        default: () => (
+          <Box sx={{ p: 3 }}>
+            <h2>⚠️ ManagerFinalization non disponibile</h2>
+            <p>File non trovato: client/src/modules/shipments/pages/ManagerFinalization.tsx</p>
+            <p>Errore: {err.message}</p>
+          </Box>
+        )
+      };
+    })
+);
+
+const ShippedOrderHistory = lazy(() => 
+  import('../../modules/shipments/pages/ShippedOrderHistory')
+    .then(module => ({ default: module.default }))
+    .catch(err => {
+      console.error('Errore caricamento ShippedOrderHistory:', err);
+      return { 
+        default: () => (
+          <Box sx={{ p: 3 }}>
+            <h2>⚠️ ShippedOrderHistory non disponibile</h2>
+            <p>File non trovato: client/src/modules/shipments/pages/ShippedOrderHistory.tsx</p>
+            <p>Errore: {err.message}</p>
+            <p>Creazione automatica del file...</p>
+            <pre style={{ background: '#f5f5f5', padding: '10px', fontSize: '12px' }}>
+{`// Crea questo file in: client/src/modules/shipments/pages/ShippedOrderHistory.tsx
+import React from 'react';
+import { Container, Typography } from '@mui/material';
+
+const ShippedOrderHistory = () => {
+  return (
+    <Container>
+      <Typography variant="h4">Storico Spedizioni</Typography>
+      <Typography>Pagina in costruzione...</Typography>
+    </Container>
+  );
+};
+
+export default ShippedOrderHistory;`}
+            </pre>
+          </Box>
+        )
+      };
+    })
 );
 
 // Loading component
@@ -54,12 +121,22 @@ const LoadingSpinner = () => (
   </Box>
 );
 
-// Placeholder component temporaneo per testing
-const ShipmentPlaceholder = () => (
+// Componente temporaneo per testing
+const ShipmentFallback = ({ pageName }: { pageName: string }) => (
   <Box sx={{ p: 3 }}>
-    <h2>🚧 Spedizioni in Sviluppo</h2>
+    <h2>🚧 {pageName} in Sviluppo</h2>
     <p>Questa sezione è attualmente in fase di sviluppo.</p>
-    <p>I file esistono in: client/src/modules/shipments/pages/</p>
+    <p>Path corrente: {window.location.pathname}</p>
+    <p>File previsto: client/src/modules/shipments/pages/{pageName}.tsx</p>
+    
+    <details style={{ marginTop: '20px' }}>
+      <summary>🔧 Istruzioni per risolvere</summary>
+      <ol>
+        <li>Verifica che la cartella esista: <code>client/src/modules/shipments/pages/</code></li>
+        <li>Crea il file mancante: <code>{pageName}.tsx</code></li>
+        <li>Oppure copia i contenuti dagli artefatti forniti</li>
+      </ol>
+    </details>
   </Box>
 );
 
@@ -96,7 +173,7 @@ const AppRoutes = () => {
         <Route path="/basins/new" element={<ProtectedRoute><BasinForm /></ProtectedRoute>} />
         <Route path="/basins/edit/:id" element={<ProtectedRoute><BasinForm /></ProtectedRoute>} />
         
-        {/* === SPEDIZIONI ROUTES - Usando i file esistenti === */}
+        {/* ✅ SPEDIZIONI ROUTES - Con fallback migliorati */}
         <Route 
           path="/shipments" 
           element={
@@ -141,12 +218,24 @@ const AppRoutes = () => {
           } 
         />
         
+        {/* ✅ ROUTE STORICO SPEDIZIONI */}
+        <Route 
+          path="/shipments/history" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <ShippedOrderHistory />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
         {/* Fallback per altre route spedizioni non definite */}
         <Route 
           path="/shipments/*" 
           element={
             <ProtectedRoute>
-              <ShipmentPlaceholder />
+              <ShipmentFallback pageName="Spedizioni" />
             </ProtectedRoute>
           } 
         />
@@ -159,7 +248,7 @@ const AppRoutes = () => {
         <Route path="/reports" element={<ProtectedRoute><div>Report - Coming Soon</div></ProtectedRoute>} />
 
         {/* 404 Route */}
-        <Route path="*" element={<div>Pagina non trovata</div>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   );
