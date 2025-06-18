@@ -23,9 +23,13 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relazioni per operatori
-  assignedOrders    PickupOrder[] @relation("OperatorAssigned")
+  assignedOrders     PickupOrder[] @relation("OperatorAssigned")
   operatorActivities OperatorActivity[]
   processingSessions Processing[] @relation("ProcessingOperator")
+  
+  // Validazioni conferimenti
+  validatedDeliveries Delivery[] @relation("DeliveryValidator")
+  createdDeliveries   Delivery[] @relation("DeliveryCreator")
 }
 
 // ================================
@@ -67,6 +71,7 @@ model Basin {
   pickupOrders PickupOrder[]
   deliveries   Delivery[]
   analyses     MerceologicalAnalysis[] @relation("AnalysisBasin")
+  contributors Contributor[] // AGGIUNTO per conferitori
 }
 
 // ================================
@@ -93,6 +98,76 @@ model LogisticEntity {
   sentOrders     PickupOrder[] @relation("LogisticSender")
   receivedOrders PickupOrder[] @relation("LogisticRecipient")
   transportedOrders PickupOrder[] @relation("LogisticTransporter")
+}
+
+// ================================
+// CONFERITORI (Nuova Entità)
+// ================================
+
+model Contributor {
+  id            String   @id @default(uuid())
+  name          String   // Nome conferitore
+  vatNumber     String?  // Partita IVA (opzionale)
+  fiscalCode    String?  // Codice fiscale (opzionale)
+  address       String?
+  city          String?
+  zipCode       String?
+  province      String?
+  phone         String?
+  email         String?
+  contactPerson String?  // Persona di riferimento
+  
+  // Associazione a bacino
+  basinId       String?
+  basin         Basin?   @relation(fields: [basinId], references: [id])
+  
+  // Tipologie autorizzate (JSON array)
+  authorizedMaterialTypes String // JSON: ["MONO", "MULTI", "OLIO", ...]
+  
+  // Stato
+  isActive      Boolean  @default(true)
+  notes         String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relazioni
+  deliveries    Delivery[] @relation("ContributorDeliveries")
+  
+  @@index([name])
+  @@index([basinId])
+}
+
+// ================================
+// TIPOLOGIE MATERIALI (Nuova Entità)
+// ================================
+
+model MaterialType {
+  id              String   @id @default(uuid())
+  code            String   @unique // MONO, MULTI, OLIO, PLASTICA, METALLI, VETRO_SARCO
+  name            String   // Nome descrittivo
+  description     String?
+  unit            String   @default("kg") // Unità di misura
+  cerCode         String?  // Codice CER se applicabile
+  reference       String?  // COREPLA, CORIPET, etc.
+  color           String?  // Colore per UI (#hex)
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0) // Ordine visualizzazione
+  
+  // Sottocategorie (per PLASTICA -> COREPET, etc.)
+  parentId        String?
+  parent          MaterialType? @relation("MaterialTypeHierarchy", fields: [parentId], references: [id])
+  children        MaterialType[] @relation("MaterialTypeHierarchy")
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relazioni
+  deliveries      Delivery[] @relation("DeliveryMaterialType")
+  inventories     Inventory[] @relation("InventoryMaterialType")
+  
+  @@index([code])
+  @@index([parentId])
 }
 
 // ================================
@@ -244,40 +319,68 @@ model PickupOrderStatusHistory {
 }
 
 // ================================
-// GESTIONE CONFERIMENTI
+// GESTIONE CONFERIMENTI (AGGIORNATO)
 // ================================
 
 model Delivery {
   id              String   @id @default(uuid())
-  date            DateTime // Solo data, non ora
+  date            DateTime // Data conferimento (solo data)
   
-  // Riferimenti
-  clientId        String?  // Cliente che conferisce (opzionale)
-  client          Client?  @relation(fields: [clientId], references: [id], name: "DeliveryClient")
-  basinId         String?  // Bacino di destinazione (opzionale)
+  // Riferimenti aggiornati
+  contributorId   String   // Conferitore (obbligatorio)
+  contributor     Contributor @relation(fields: [contributorId], references: [id], name: "ContributorDeliveries")
+  
+  materialTypeId  String   // Tipologia materiale (obbligatorio)
+  materialType    MaterialType @relation(fields: [materialTypeId], references: [id], name: "DeliveryMaterialType")
+  
+  // Bacino derivato dal conferitore (per compatibilità)
+  basinId         String?
   basin           Basin?   @relation(fields: [basinId], references: [id])
   
-  // Dettagli Materiale
-  materialType    String   // Tipo materiale (CER code)
-  materialDescription String?
-  reference       String   // COREPLA, CORIPET, etc.
+  // Cliente per compatibilità (deprecato)
+  clientId        String?
+  client          Client?  @relation(fields: [clientId], references: [id], name: "DeliveryClient")
   
-  // Quantità
-  weight          Float    // Peso in tonnellate
+  // Dettagli conferimento
+  weight          Float    // Peso in kg
+  unit            String   @default("kg") // Unità di misura
   
-  // Documenti
+  // Documenti e tracciabilità
   documentNumber  String?  // Numero documento di trasporto
-  documents       String?  // JSON per documenti allegati
+  vehiclePlate    String?  // Targa mezzo
+  driverName      String?  // Nome autista
   
-  // Note
+  // Qualità e note
+  quality         String?  // Qualità materiale (OTTIMA, BUONA, SCARSA)
+  moistureLevel   String?  // Livello umidità (BASSO, MEDIO, ALTO)
+  contaminationLevel String? // Livello contaminazione
+  
+  // Documenti digitali
+  documents       String?  // JSON per documenti allegati
+  photos          String?  // JSON per foto
+  
+  // Note e osservazioni
   notes           String?
   
+  // Validazione
+  isValidated     Boolean  @default(false) // Se validato da operatore
+  validatedBy     String?  // ID utente che ha validato
+  validatedAt     DateTime?
+  validatedByUser User?    @relation(fields: [validatedBy], references: [id], name: "DeliveryValidator")
+  
+  // Audit
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-
-  // Indici
+  createdBy       String?  // ID utente che ha inserito
+  createdByUser   User?    @relation(fields: [createdBy], references: [id], name: "DeliveryCreator")
+  
+  @@unique([date, contributorId, materialTypeId]) // Evita duplicati stesso giorno/conferitore/materiale
+  
+  // Indici per performance
   @@index([date])
-  @@index([materialType, reference])
+  @@index([contributorId])
+  @@index([materialTypeId])
+  @@index([basinId])
 }
 
 // ================================
@@ -331,7 +434,7 @@ model ProcessingOutput {
 }
 
 // ================================
-// GESTIONE GIACENZE
+// GESTIONE GIACENZE (AGGIORNATO)
 // ================================
 
 model Inventory {
@@ -339,8 +442,12 @@ model Inventory {
   date            DateTime // Data di riferimento
   
   // Materiale
-  materialType    String   // Tipo materiale
+  materialType    String   // Tipo materiale (deprecato)
   reference       String   // COREPLA, CORIPET, etc.
+  
+  // Riferimento alla nuova tipologia (AGGIUNTO)
+  materialTypeId  String?
+  materialTypeRel MaterialType? @relation(fields: [materialTypeId], references: [id], name: "InventoryMaterialType")
   
   // Movimenti
   initialStock    Float    // Giacenza iniziale
@@ -358,11 +465,12 @@ model Inventory {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
-  @@unique([date, materialType, reference]) // Un record per giorno/materiale/riferimento
+  @@unique([date, materialType, reference, materialTypeId]) // AGGIORNATO per includere materialTypeId
   
   // Indici per performance
   @@index([date])
   @@index([materialType, reference])
+  @@index([materialTypeId])
 }
 
 // ================================

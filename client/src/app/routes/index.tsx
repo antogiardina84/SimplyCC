@@ -1,4 +1,4 @@
-// client/src/app/routes/index.tsx - ROUTES COMPLETE CORRETTE
+// client/src/app/routes/index.tsx - ROUTES COMPLETE CON DELIVERIES
 
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
@@ -28,90 +28,103 @@ const ClientDetail = lazy(() => import('../../modules/clients/pages/ClientDetail
 const BasinList = lazy(() => import('../../modules/basins/pages/BasinList'));
 const BasinForm = lazy(() => import('../../modules/basins/pages/BasinForm'));
 
-// ✅ SPEDIZIONI - Import con gestione errori dettagliata
+// ✅ DELIVERIES - Modulo Conferimenti
+const DeliveriesCalendar = lazy(() => 
+  import('../../modules/deliveries/pages/DeliveriesCalendar')
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>📅 Calendario Conferimenti</h2>
+          <p>⚠️ Componente non trovato: client/src/modules/deliveries/pages/DeliveriesCalendar.tsx</p>
+          <p>Usa gli artefatti forniti per creare questo file.</p>
+        </Box>
+      )
+    }))
+);
+
+const DeliveriesList = lazy(() => 
+  import('../../modules/deliveries/pages/DeliveriesList')
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>📋 Lista Conferimenti</h2>
+          <p>Pagina in sviluppo...</p>
+        </Box>
+      )
+    }))
+);
+
+const ContributorsList = lazy(() => 
+  import('../../modules/deliveries/pages/ContributorsList')
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>👥 Gestione Conferitori</h2>
+          <p>Pagina in sviluppo...</p>
+        </Box>
+      )
+    }))
+);
+
+const MaterialTypesList = lazy(() => 
+  import('../../modules/deliveries/pages/MaterialTypesList')
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>🗂️ Tipologie Materiali</h2>
+          <p>Pagina in sviluppo...</p>
+        </Box>
+      )
+    }))
+);
+
+// ✅ SPEDIZIONI - Import con gestione errori
 const ShipmentCalendar = lazy(() => 
   import('../../modules/shipments/pages/ShipmentCalendar')
-    .then(module => ({ default: module.default }))
-    .catch(err => {
-      console.error('Errore caricamento ShipmentCalendar:', err);
-      return { 
-        default: () => (
-          <Box sx={{ p: 3 }}>
-            <h2>⚠️ ShipmentCalendar non disponibile</h2>
-            <p>File non trovato: client/src/modules/shipments/pages/ShipmentCalendar.tsx</p>
-            <p>Errore: {err.message}</p>
-          </Box>
-        )
-      };
-    })
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>📅 Calendario Spedizioni</h2>
+          <p>Pagina in sviluppo...</p>
+        </Box>
+      )
+    }))
 );
 
 const ShipmentOperatorDashboard = lazy(() => 
   import('../../modules/shipments/pages/ShipmentOperatorDashboard')
-    .then(module => ({ default: module.default }))
-    .catch(err => {
-      console.error('Errore caricamento ShipmentOperatorDashboard:', err);
-      return { 
-        default: () => (
-          <Box sx={{ p: 3 }}>
-            <h2>⚠️ ShipmentOperatorDashboard non disponibile</h2>
-            <p>File non trovato: client/src/modules/shipments/pages/ShipmentOperatorDashboard.tsx</p>
-            <p>Errore: {err.message}</p>
-          </Box>
-        )
-      };
-    })
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>👨‍💼 Dashboard Operatore</h2>
+          <p>Pagina in sviluppo...</p>
+        </Box>
+      )
+    }))
 );
 
 const ManagerFinalization = lazy(() => 
   import('../../modules/shipments/pages/ManagerFinalization')
-    .then(module => ({ default: module.default }))
-    .catch(err => {
-      console.error('Errore caricamento ManagerFinalization:', err);
-      return { 
-        default: () => (
-          <Box sx={{ p: 3 }}>
-            <h2>⚠️ ManagerFinalization non disponibile</h2>
-            <p>File non trovato: client/src/modules/shipments/pages/ManagerFinalization.tsx</p>
-            <p>Errore: {err.message}</p>
-          </Box>
-        )
-      };
-    })
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>✅ Finalizzazione Manager</h2>
+          <p>Pagina in sviluppo...</p>
+        </Box>
+      )
+    }))
 );
 
 const ShippedOrderHistory = lazy(() => 
   import('../../modules/shipments/pages/ShippedOrderHistory')
-    .then(module => ({ default: module.default }))
-    .catch(err => {
-      console.error('Errore caricamento ShippedOrderHistory:', err);
-      return { 
-        default: () => (
-          <Box sx={{ p: 3 }}>
-            <h2>⚠️ ShippedOrderHistory non disponibile</h2>
-            <p>File non trovato: client/src/modules/shipments/pages/ShippedOrderHistory.tsx</p>
-            <p>Errore: {err.message}</p>
-            <p>Creazione automatica del file...</p>
-            <pre style={{ background: '#f5f5f5', padding: '10px', fontSize: '12px' }}>
-{`// Crea questo file in: client/src/modules/shipments/pages/ShippedOrderHistory.tsx
-import React from 'react';
-import { Container, Typography } from '@mui/material';
-
-const ShippedOrderHistory = () => {
-  return (
-    <Container>
-      <Typography variant="h4">Storico Spedizioni</Typography>
-      <Typography>Pagina in costruzione...</Typography>
-    </Container>
-  );
-};
-
-export default ShippedOrderHistory;`}
-            </pre>
-          </Box>
-        )
-      };
-    })
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>📋 Storico Spedizioni</h2>
+          <p>Pagina in sviluppo...</p>
+        </Box>
+      )
+    }))
 );
 
 // Loading component
@@ -121,22 +134,13 @@ const LoadingSpinner = () => (
   </Box>
 );
 
-// Componente temporaneo per testing
-const ShipmentFallback = ({ pageName }: { pageName: string }) => (
-  <Box sx={{ p: 3 }}>
-    <h2>🚧 {pageName} in Sviluppo</h2>
-    <p>Questa sezione è attualmente in fase di sviluppo.</p>
-    <p>Path corrente: {window.location.pathname}</p>
-    <p>File previsto: client/src/modules/shipments/pages/{pageName}.tsx</p>
-    
-    <details style={{ marginTop: '20px' }}>
-      <summary>🔧 Istruzioni per risolvere</summary>
-      <ol>
-        <li>Verifica che la cartella esista: <code>client/src/modules/shipments/pages/</code></li>
-        <li>Crea il file mancante: <code>{pageName}.tsx</code></li>
-        <li>Oppure copia i contenuti dagli artefatti forniti</li>
-      </ol>
-    </details>
+// Componente temporaneo per moduli non implementati
+const ComingSoon = ({ title, module }: { title: string; module: string }) => (
+  <Box sx={{ p: 3, textAlign: 'center' }}>
+    <h2>🚧 {title}</h2>
+    <p>Questo modulo è attualmente in fase di sviluppo.</p>
+    <p>Modulo: <code>{module}</code></p>
+    <p>Path: <code>{window.location.pathname}</code></p>
   </Box>
 );
 
@@ -150,30 +154,87 @@ const AppRoutes = () => {
         {/* Protected Routes */}
         <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         
-        {/* Pickup Orders Routes */}
+        {/* ========================================
+            PICKUP ORDERS ROUTES
+        ======================================== */}
         <Route path="/pickup-orders" element={<ProtectedRoute><PickupOrderList /></ProtectedRoute>} />
         <Route path="/pickup-orders/new" element={<ProtectedRoute><PickupOrderForm /></ProtectedRoute>} />
         <Route path="/pickup-orders/upload" element={<ProtectedRoute><PickupOrderUpload /></ProtectedRoute>} />
         <Route path="/pickup-orders/:id" element={<ProtectedRoute><PickupOrderDetail /></ProtectedRoute>} />
         <Route path="/pickup-orders/edit/:id" element={<ProtectedRoute><PickupOrderForm /></ProtectedRoute>} />
         
-        {/* Users Routes */}
+        {/* ========================================
+            USERS ROUTES
+        ======================================== */}
         <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
         <Route path="/users/new" element={<ProtectedRoute><UserForm /></ProtectedRoute>} />
         <Route path="/users/edit/:id" element={<ProtectedRoute><UserForm /></ProtectedRoute>} />
         
-        {/* Clients Routes */}
+        {/* ========================================
+            CLIENTS ROUTES
+        ======================================== */}
         <Route path="/clients" element={<ProtectedRoute><ClientList /></ProtectedRoute>} />
         <Route path="/clients/new" element={<ProtectedRoute><ClientForm /></ProtectedRoute>} />
         <Route path="/clients/edit/:id" element={<ProtectedRoute><ClientForm /></ProtectedRoute>} />
         <Route path="/clients/:id" element={<ProtectedRoute><ClientDetail /></ProtectedRoute>} />
         
-        {/* Basins Routes */}
+        {/* ========================================
+            BASINS ROUTES
+        ======================================== */}
         <Route path="/basins" element={<ProtectedRoute><BasinList /></ProtectedRoute>} />
         <Route path="/basins/new" element={<ProtectedRoute><BasinForm /></ProtectedRoute>} />
         <Route path="/basins/edit/:id" element={<ProtectedRoute><BasinForm /></ProtectedRoute>} />
         
-        {/* ✅ SPEDIZIONI ROUTES - Con fallback migliorati */}
+        {/* ========================================
+            ✅ DELIVERIES ROUTES - NUOVO MODULO
+        ======================================== */}
+        <Route 
+          path="/deliveries" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <DeliveriesList />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/deliveries/calendar" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <DeliveriesCalendar />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/deliveries/contributors" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <ContributorsList />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/deliveries/material-types" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <MaterialTypesList />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* ========================================
+            ✅ SHIPMENTS ROUTES
+        ======================================== */}
         <Route 
           path="/shipments" 
           element={
@@ -218,7 +279,6 @@ const AppRoutes = () => {
           } 
         />
         
-        {/* ✅ ROUTE STORICO SPEDIZIONI */}
         <Route 
           path="/shipments/history" 
           element={
@@ -230,22 +290,44 @@ const AppRoutes = () => {
           } 
         />
         
-        {/* Fallback per altre route spedizioni non definite */}
+        {/* ========================================
+            PLACEHOLDER ROUTES - FUTURE MODULES
+        ======================================== */}
         <Route 
-          path="/shipments/*" 
+          path="/processing" 
           element={
             <ProtectedRoute>
-              <ShipmentFallback pageName="Spedizioni" />
+              <ComingSoon title="Lavorazioni" module="processing" />
             </ProtectedRoute>
           } 
         />
         
-        {/* Placeholder routes for future modules */}
-        <Route path="/deliveries" element={<ProtectedRoute><div>Conferimenti - Coming Soon</div></ProtectedRoute>} />
-        <Route path="/processing" element={<ProtectedRoute><div>Lavorazioni - Coming Soon</div></ProtectedRoute>} />
-        <Route path="/analysis" element={<ProtectedRoute><div>Analisi - Coming Soon</div></ProtectedRoute>} />
-        <Route path="/inventory" element={<ProtectedRoute><div>Giacenze - Coming Soon</div></ProtectedRoute>} />
-        <Route path="/reports" element={<ProtectedRoute><div>Report - Coming Soon</div></ProtectedRoute>} />
+        <Route 
+          path="/analysis" 
+          element={
+            <ProtectedRoute>
+              <ComingSoon title="Analisi Merceologiche" module="analysis" />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/inventory" 
+          element={
+            <ProtectedRoute>
+              <ComingSoon title="Gestione Giacenze" module="inventory" />
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/reports" 
+          element={
+            <ProtectedRoute>
+              <ComingSoon title="Report e Analytics" module="reports" />
+            </ProtectedRoute>
+          } 
+        />
 
         {/* 404 Route */}
         <Route path="*" element={<Navigate to="/" replace />} />

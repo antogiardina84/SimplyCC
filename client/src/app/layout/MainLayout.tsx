@@ -1,3 +1,5 @@
+// client/src/core/layout/MainLayout.tsx - AGGIORNATO CON DELIVERIES
+
 import { useState, type ReactNode } from 'react';
 import {
   Box,
@@ -28,8 +30,8 @@ import {
   Domain,
   Add,
   CalendarToday,
-  PersonPin,
-  CheckCircle,
+  RecyclingOutlined,
+  PersonAdd
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -63,7 +65,7 @@ const menuItems: MenuItem[] = [
       },
       {
         text: 'Nuovo Utente',
-        icon: <Group />,
+        icon: <PersonAdd />,
         path: '/users/new',
       },
     ],
@@ -94,10 +96,32 @@ const menuItems: MenuItem[] = [
       },
     ],
   },
+  // ✅ NUOVO: Modulo Conferimenti
   {
     text: 'Conferimenti',
-    icon: <LocalShipping />,
-    path: '/deliveries',
+    icon: <RecyclingOutlined />,
+    children: [
+      {
+        text: 'Calendario',
+        icon: <CalendarToday />,
+        path: '/deliveries/calendar',
+      },
+      {
+        text: 'Lista Conferimenti',
+        icon: <RecyclingOutlined />,
+        path: '/deliveries',
+      },
+      {
+        text: 'Conferitori',
+        icon: <People />,
+        path: '/deliveries/contributors',
+      },
+      {
+        text: 'Tipologie Materiali',
+        icon: <Science />,
+        path: '/deliveries/material-types',
+      },
+    ],
   },
   {
     text: 'Buoni di Ritiro',
@@ -116,35 +140,35 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
-    text: 'Lavorazioni',
-    icon: <Science />,
-    path: '/processing',
-  },
-  {
     text: 'Spedizioni',
     icon: <LocalShipping />,
     children: [
       {
-        text: 'Calendario Spedizioni',
+        text: 'Calendario',
         icon: <CalendarToday />,
         path: '/shipments/calendar',
       },
       {
         text: 'Dashboard Operatore',
-        icon: <PersonPin />,
+        icon: <People />,
         path: '/shipments/operator',
       },
       {
-        text: 'Storico Spedizioni', // 
-        icon: <Assessment />,
-        path: '/shipments/history',
-      },
-      {
         text: 'Finalizzazione Manager',
-        icon: <CheckCircle />,
+        icon: <Assessment />,
         path: '/shipments/manager',
       },
+      {
+        text: 'Storico Spedizioni',
+        icon: <LocalShipping />,
+        path: '/shipments/history',
+      },
     ],
+  },
+  {
+    text: 'Lavorazioni',
+    icon: <Science />,
+    path: '/processing',
   },
   {
     text: 'Analisi',
@@ -169,7 +193,12 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   const isMobile = useMediaQuery('(max-width: 1199px)');
   
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [expandedItems, setExpandedItems] = useState<string[]>(['Clienti & Bacini', 'Buoni di Ritiro', 'Spedizioni']);
+  const [expandedItems, setExpandedItems] = useState<string[]>([
+    'Clienti & Bacini', 
+    'Buoni di Ritiro', 
+    'Conferimenti',  // ✅ AGGIUNTO
+    'Spedizioni'
+  ]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -189,11 +218,6 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     return location.pathname.startsWith(path) && path !== '/';
   };
 
-  const handleNavigation = (path: string) => {
-    navigate(path);
-    if (isMobile) setMobileOpen(false);
-  };
-
   const renderMenuItem = (item: MenuItem, depth = 0) => {
     const hasChildren = item.children && item.children.length > 0;
     const isExpanded = expandedItems.includes(item.text);
@@ -208,7 +232,8 @@ const MainLayout = ({ children }: MainLayoutProps) => {
               if (hasChildren) {
                 handleExpandClick(item.text);
               } else if (item.path) {
-                handleNavigation(item.path);
+                navigate(item.path);
+                if (isMobile) setMobileOpen(false);
               }
             }}
             sx={{
@@ -271,7 +296,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      {/* Mobile menu button */}
+      {/* Mobile menu button - SEMPRE VISIBILE */}
       <IconButton
         color="inherit"
         aria-label="open drawer"

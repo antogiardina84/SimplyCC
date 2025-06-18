@@ -9,6 +9,7 @@ const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
 const JWT_EXPIRATION = process.env.JWT_EXPIRATION || '86400'; // 24 ore in secondi
 
+// ✅ ESPORTATO per l'uso nel middleware
 export interface TokenPayload {
   userId: string;
   email: string;
@@ -115,6 +116,7 @@ export const generateToken = (user: User): string => {
   });
 };
 
+// ✅ ESPORTATO per l'uso nel middleware
 export const verifyToken = (token: string): TokenPayload => {
   try {
     return jwt.verify(token, JWT_SECRET) as TokenPayload;

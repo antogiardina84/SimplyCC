@@ -1,6 +1,8 @@
 // server/src/core/setup/routes.ts
 
 import { Express } from 'express';
+
+// Import delle routes esistenti
 import { authRoutes } from '../../modules/auth/routes';
 import { userRoutes } from '../../modules/users/routes';
 import { clientRoutes } from '../../modules/clients/routes';
@@ -9,6 +11,9 @@ import { pickupOrderRoutes } from '../../modules/pickupOrders/routes';
 import { shipmentRoutes } from '../../modules/shipments/routes';
 import { logisticsRoutes } from '../../modules/shipments/routes/logistics.routes';
 import { dashboardRoutes } from '../../modules/dashboard/routes';
+
+// NUOVO: Import delle routes per conferimenti
+import { deliveriesRoutes } from '../../modules/deliveries/routes';
 
 export const setupRoutes = (app: Express, apiPrefix: string): void => {
   // Health check
@@ -25,7 +30,8 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
         'pickup-orders',
         'shipments',
         'logistics',
-        'dashboard'
+        'dashboard',
+        'deliveries' // AGGIUNTO
       ]
     });
   });
@@ -55,6 +61,9 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
   
   // Dashboard e reporting
   app.use(`${apiPrefix}/dashboard`, dashboardRoutes);
+  
+  // NUOVO: Routes per conferimenti (include deliveries, contributors, material-types, calendar)
+  app.use(`${apiPrefix}`, deliveriesRoutes);
   
   // ================================
   // API INFO ENDPOINT
@@ -110,6 +119,54 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
         dashboard: {
           base: `${apiPrefix}/dashboard`,
           description: 'Dashboard e KPI principali',
+        },
+        // NUOVO: Sezione conferimenti
+        deliveries: {
+          base: `${apiPrefix}/deliveries`,
+          description: 'Gestione conferimenti giornalieri',
+          routes: [
+            'GET / - Lista conferimenti con filtri',
+            'GET /:id - Dettaglio conferimento',
+            'POST / - Crea nuovo conferimento',
+            'PUT /:id - Modifica conferimento',
+            'DELETE /:id - Elimina conferimento',
+            'PATCH /:id/validate - Valida conferimento'
+          ]
+        },
+        contributors: {
+          base: `${apiPrefix}/contributors`,
+          description: 'Gestione conferitori/fornitori',
+          routes: [
+            'GET / - Lista conferitori con filtri',
+            'GET /:id - Dettaglio conferitore',
+            'GET /by-material/:code - Conferitori per tipologia',
+            'GET /:id/statistics - Statistiche conferitore',
+            'POST / - Crea nuovo conferitore',
+            'PUT /:id - Modifica conferitore',
+            'DELETE /:id - Elimina conferitore'
+          ]
+        },
+        materialTypes: {
+          base: `${apiPrefix}/material-types`,
+          description: 'Gestione tipologie materiali',
+          routes: [
+            'GET / - Lista tipologie',
+            'GET /hierarchy - Struttura gerarchica',
+            'GET /:id - Dettaglio tipologia',
+            'GET /code/:code - Tipologia per codice',
+            'GET /:id/statistics - Statistiche tipologia',
+            'POST / - Crea tipologia',
+            'PUT /:id - Modifica tipologia',
+            'DELETE /:id - Elimina tipologia'
+          ]
+        },
+        calendar: {
+          base: `${apiPrefix}/calendar`,
+          description: 'Calendario conferimenti',
+          routes: [
+            'GET /:year/:month - Dati calendario mensile',
+            'GET /day/:date - Conferimenti del giorno (YYYY-MM-DD)'
+          ]
         }
       },
       workflow: {
@@ -126,6 +183,15 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
           'SENDER - Mittenti/Fornitori',
           'RECIPIENT - Destinatari/Clienti',
           'TRANSPORTER - Trasportatori/Vettori'
+        ],
+        // NUOVO: Tipologie materiali
+        materialTypes: [
+          'MONO - Monomateriale plastica',
+          'MULTI - Multimateriale',
+          'OLIO - Oli esausti',
+          'PLASTICA - Materiali plastici vari',
+          'METALLI - Materiali metallici',
+          'VETRO_SARCO - Vetro e assimilati'
         ]
       },
       roles: {
@@ -157,7 +223,11 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
         `${apiPrefix}/pickup-orders`,
         `${apiPrefix}/shipments`,
         `${apiPrefix}/logistics`,
-        `${apiPrefix}/dashboard`
+        `${apiPrefix}/dashboard`,
+        `${apiPrefix}/deliveries`, // AGGIUNTO
+        `${apiPrefix}/contributors`, // AGGIUNTO
+        `${apiPrefix}/material-types`, // AGGIUNTO
+        `${apiPrefix}/calendar` // AGGIUNTO
       ]
     });
   });
