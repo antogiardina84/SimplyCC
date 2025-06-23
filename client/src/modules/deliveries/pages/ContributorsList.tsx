@@ -141,7 +141,7 @@ const ContributorsList: React.FC = () => {
             <Button
               variant="contained"
               startIcon={<Add />}
-              onClick={() => navigate('/contributors/new')}
+              onClick={() => navigate('/deliveries/contributors/new')}
               size="small"
               fullWidth
             >
@@ -179,6 +179,7 @@ const ContributorsList: React.FC = () => {
               </TableRow>
             ) : (
               contributors?.map((contributor) => {
+                // CORREZIONE: Aggiunto punto e virgola qui
                 const authorizedTypes = JSON.parse(contributor.authorizedMaterialTypes || '[]');
                 
                 return (
@@ -293,7 +294,7 @@ const ContributorsList: React.FC = () => {
                           <IconButton 
                             size="small" 
                             color="info"
-                            onClick={() => navigate(`/contributors/${contributor.id}`)}
+                            onClick={() => navigate(`/deliveries/contributors/${contributor.id}`)}
                           >
                             <Visibility fontSize="small" />
                           </IconButton>
@@ -303,7 +304,7 @@ const ContributorsList: React.FC = () => {
                           <IconButton 
                             size="small" 
                             color="primary"
-                            onClick={() => navigate(`/contributors/${contributor.id}/edit`)}
+                            onClick={() => navigate(`/deliveries/contributors/${contributor.id}/edit`)}
                           >
                             <Edit fontSize="small" />
                           </IconButton>

@@ -1,4 +1,4 @@
-// server/src/modules/deliveries/routes/index.ts
+// server/src/modules/deliveries/routes/index.ts - FIXED ROUTE ORDER
 
 import { Router } from 'express';
 import { authMiddleware } from '../../../core/middleware/auth.middleware';
@@ -22,12 +22,14 @@ router.delete('/deliveries/:id', deliveriesController.deleteDelivery);
 router.patch('/deliveries/:id/validate', deliveriesController.validateDelivery);
 
 // ================================
-// ROUTES CALENDARIO
+// ROUTES CALENDARIO - ORDINE CORRETTO!
 // ================================
 
-// Calendario conferimenti
-router.get('/calendar/:year/:month', deliveriesController.getMonthlyCalendar);
+// IMPORTANTE: La route più specifica DEVE venire prima di quella generica
+// /calendar/day/:date DEVE venire PRIMA di /calendar/:year/:month
+
 router.get('/calendar/day/:date', deliveriesController.getDayDeliveries);
+router.get('/calendar/:year/:month', deliveriesController.getMonthlyCalendar);
 
 // ================================
 // ROUTES CONFERITORI

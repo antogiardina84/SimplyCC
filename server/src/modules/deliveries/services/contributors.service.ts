@@ -1,4 +1,4 @@
-// server/src/modules/deliveries/services/contributors.service.ts
+// server/src/modules/deliveries/services/contributors.service.ts - FIXED
 
 import { PrismaClient, Prisma } from '@prisma/client';
 import { HttpException } from '../../../core/middleware/error.middleware';
@@ -21,7 +21,7 @@ export interface CreateContributorData {
   email?: string;
   contactPerson?: string;
   basinId?: string;
-  authorizedMaterialTypes: string[]; // Array di codici tipologia (es: ["MONO", "MULTI"])
+  authorizedMaterialTypes: string[]; // Array di codici materiali
   notes?: string;
 }
 
@@ -30,10 +30,23 @@ export interface UpdateContributorData extends Partial<CreateContributorData> {
 }
 
 export interface ContributorFilters {
-  search?: string; // Ricerca per nome
+  search?: string;
   basinId?: string;
-  materialTypeCode?: string; // Filtra per tipologia autorizzata
+  materialTypeCode?: string;
   isActive?: boolean;
+}
+
+export interface ContributorStatistics {
+  year: number;
+  totalWeight: number;
+  totalDeliveries: number;
+  byMaterial: Record<string, { weight: number; count: number }>;
+  monthlyTrend: Array<{
+    month: string;
+    weight: number;
+    deliveries: number;
+  }>;
+  averageDeliveryWeight: number;
 }
 
 // ================================
@@ -41,156 +54,165 @@ export interface ContributorFilters {
 // ================================
 
 export const findAllContributors = async (filters: ContributorFilters = {}) => {
-  const where: Prisma.ContributorWhereInput = {};
+  try {
+    const where: Prisma.ContributorWhereInput = {};
 
-  // Ricerca testuale
-  if (filters.search) {
-    where.OR = [
-      { name: { contains: filters.search, mode: 'insensitive' } },
-      { vatNumber: { contains: filters.search, mode: 'insensitive' } },
-      { fiscalCode: { contains: filters.search, mode: 'insensitive' } }
-    ];
-  }
+    // Filtro per ricerca testuale
+    if (filters.search && filters.search.trim() !== '') {
+      where.OR = [
+        { name: { contains: filters.search, mode: 'insensitive' } },
+        { contactPerson: { contains: filters.search, mode: 'insensitive' } },
+        { city: { contains: filters.search, mode: 'insensitive' } },
+        { vatNumber: { contains: filters.search, mode: 'insensitive' } }
+      ];
+    }
 
-  // Filtro per bacino
-  if (filters.basinId) {
-    where.basinId = filters.basinId;
-  }
+    // Filtro per bacino
+    if (filters.basinId) {
+      where.basinId = filters.basinId;
+    }
 
-  // Filtro per stato attivo
-  if (filters.isActive !== undefined) {
-    where.isActive = filters.isActive;
-  }
+    // Filtro per stato attivo/inattivo
+    if (filters.isActive !== undefined) {
+      where.isActive = filters.isActive;
+    }
 
-  const contributors = await prisma.contributor.findMany({
-    where,
-    include: {
-      basin: true,
-      _count: {
-        select: {
-          deliveries: true
+    // Filtro per tipologia materiale autorizzata
+    if (filters.materialTypeCode) {
+      where.authorizedMaterialTypes = {
+        contains: filters.materialTypeCode
+      };
+    }
+
+    const contributors = await prisma.contributor.findMany({
+      where,
+      include: {
+        basin: {
+          include: {
+            client: true
+          }
+        },
+        _count: {
+          select: {
+            deliveries: true
+          }
         }
-      }
-    },
-    orderBy: [
-      { name: 'asc' }
-    ]
-  });
-
-  // Filtro per tipologia materiale autorizzata (post-query perché è JSON)
-  if (filters.materialTypeCode) {
-    return contributors.filter(contributor => {
-      const authorizedTypes = JSON.parse(contributor.authorizedMaterialTypes || '[]');
-      return authorizedTypes.includes(filters.materialTypeCode);
+      },
+      orderBy: [
+        { isActive: 'desc' },
+        { name: 'asc' }
+      ]
     });
-  }
 
-  return contributors;
+    return contributors;
+  } catch (error) {
+    console.error('Errore in findAllContributors:', error);
+    throw new HttpException(500, 'Errore durante il recupero dei conferitori');
+  }
 };
 
 export const findContributorById = async (id: string) => {
-  const contributor = await prisma.contributor.findUnique({
-    where: { id },
-    include: {
-      basin: true,
-      deliveries: {
-        include: {
-          materialType: true
+  try {
+    const contributor = await prisma.contributor.findUnique({
+      where: { id },
+      include: {
+        basin: {
+          include: {
+            client: true
+          }
         },
-        orderBy: {
-          date: 'desc'
+        deliveries: {
+          take: 10,
+          orderBy: { date: 'desc' },
+          include: {
+            materialType: true
+          }
         },
-        take: 10 // Ultimi 10 conferimenti
-      },
-      _count: {
-        select: {
-          deliveries: true
+        _count: {
+          select: {
+            deliveries: true
+          }
         }
       }
+    });
+
+    if (!contributor) {
+      throw new HttpException(404, 'Conferitore non trovato');
     }
-  });
 
-  if (!contributor) {
-    throw new HttpException(404, 'Conferitore non trovato');
+    return contributor;
+  } catch (error) {
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    console.error('Errore in findContributorById:', error);
+    throw new HttpException(500, 'Errore durante il recupero del conferitore');
   }
-
-  return contributor;
 };
 
 export const createContributor = async (data: CreateContributorData) => {
   try {
-    // Verifica unicità partita IVA se fornita
+    // Verifica che il nome non esista già
+    const existingContributor = await prisma.contributor.findFirst({
+      where: {
+        name: data.name,
+        isActive: true
+      }
+    });
+
+    if (existingContributor) {
+      throw new HttpException(400, 'Esiste già un conferitore attivo con questo nome');
+    }
+
+    // Verifica che la P.IVA non esista già (se fornita)
     if (data.vatNumber) {
       const existingVat = await prisma.contributor.findFirst({
-        where: { vatNumber: data.vatNumber }
+        where: {
+          vatNumber: data.vatNumber,
+          isActive: true
+        }
       });
+
       if (existingVat) {
-        throw new HttpException(400, 'Partita IVA già registrata');
+        throw new HttpException(400, 'Esiste già un conferitore attivo con questa Partita IVA');
       }
     }
 
-    // Verifica unicità codice fiscale se fornito
-    if (data.fiscalCode) {
-      const existingFiscal = await prisma.contributor.findFirst({
-        where: { fiscalCode: data.fiscalCode }
-      });
-      if (existingFiscal) {
-        throw new HttpException(400, 'Codice fiscale già registrato');
-      }
-    }
-
-    // Verifica che il bacino esista se fornito
+    // Verifica che il bacino esista (se fornito)
     if (data.basinId) {
       const basin = await prisma.basin.findUnique({
         where: { id: data.basinId }
       });
+
       if (!basin) {
         throw new HttpException(404, 'Bacino non trovato');
       }
     }
 
-    // Verifica che le tipologie materiali esistano
-    if (data.authorizedMaterialTypes.length > 0) {
-      const materialTypes = await prisma.materialType.findMany({
-        where: {
-          code: {
-            in: data.authorizedMaterialTypes
+    // Crea il conferitore
+    const contributor = await prisma.contributor.create({
+      data: {
+        name: data.name,
+        vatNumber: data.vatNumber,
+        fiscalCode: data.fiscalCode,
+        address: data.address,
+        city: data.city,
+        zipCode: data.zipCode,
+        province: data.province,
+        phone: data.phone,
+        email: data.email,
+        contactPerson: data.contactPerson,
+        basinId: data.basinId,
+        authorizedMaterialTypes: JSON.stringify(data.authorizedMaterialTypes || []),
+        notes: data.notes,
+        isActive: true
+      },
+      include: {
+        basin: {
+          include: {
+            client: true
           }
         }
-      });
-
-      if (materialTypes.length !== data.authorizedMaterialTypes.length) {
-        const foundCodes = materialTypes.map(mt => mt.code);
-        const missingCodes = data.authorizedMaterialTypes.filter(code => !foundCodes.includes(code));
-        throw new HttpException(400, `Tipologie materiali non trovate: ${missingCodes.join(', ')}`);
-      }
-    }
-
-    // Prepara i dati per la creazione usando la sintassi Prisma corretta
-    const createData: Prisma.ContributorCreateInput = {
-      name: data.name,
-      vatNumber: data.vatNumber,
-      fiscalCode: data.fiscalCode,
-      address: data.address,
-      city: data.city,
-      zipCode: data.zipCode,
-      province: data.province,
-      phone: data.phone,
-      email: data.email,
-      contactPerson: data.contactPerson,
-      notes: data.notes,
-      authorizedMaterialTypes: JSON.stringify(data.authorizedMaterialTypes)
-    };
-
-    // Gestione relazione bacino
-    if (data.basinId) {
-      createData.basin = { connect: { id: data.basinId } };
-    }
-
-    const contributor = await prisma.contributor.create({
-      data: createData,
-      include: {
-        basin: true
       }
     });
 
@@ -199,306 +221,267 @@ export const createContributor = async (data: CreateContributorData) => {
     if (error instanceof HttpException) {
       throw error;
     }
+    console.error('Errore in createContributor:', error);
     throw new HttpException(500, 'Errore durante la creazione del conferitore');
   }
 };
 
 export const updateContributor = async (id: string, data: UpdateContributorData) => {
-  const contributor = await prisma.contributor.findUnique({
-    where: { id }
-  });
+  try {
+    // Verifica che il conferitore esista
+    const existingContributor = await prisma.contributor.findUnique({
+      where: { id }
+    });
 
-  if (!contributor) {
-    throw new HttpException(404, 'Conferitore non trovato');
-  }
+    if (!existingContributor) {
+      throw new HttpException(404, 'Conferitore non trovato');
+    }
 
-  // Verifica unicità partita IVA se modificata
-  if (data.vatNumber && data.vatNumber !== contributor.vatNumber) {
-    const existingVat = await prisma.contributor.findFirst({
-      where: { 
-        vatNumber: data.vatNumber,
-        id: { not: id }
+    // Verifica unicità del nome (se viene modificato)
+    if (data.name && data.name !== existingContributor.name) {
+      const nameExists = await prisma.contributor.findFirst({
+        where: {
+          name: data.name,
+          isActive: true,
+          id: { not: id }
+        }
+      });
+
+      if (nameExists) {
+        throw new HttpException(400, 'Esiste già un conferitore attivo con questo nome');
       }
-    });
-    if (existingVat) {
-      throw new HttpException(400, 'Partita IVA già registrata');
     }
-  }
 
-  // Verifica unicità codice fiscale se modificato
-  if (data.fiscalCode && data.fiscalCode !== contributor.fiscalCode) {
-    const existingFiscal = await prisma.contributor.findFirst({
-      where: { 
-        fiscalCode: data.fiscalCode,
-        id: { not: id }
+    // Verifica unicità della P.IVA (se viene modificata)
+    if (data.vatNumber && data.vatNumber !== existingContributor.vatNumber) {
+      const vatExists = await prisma.contributor.findFirst({
+        where: {
+          vatNumber: data.vatNumber,
+          isActive: true,
+          id: { not: id }
+        }
+      });
+
+      if (vatExists) {
+        throw new HttpException(400, 'Esiste già un conferitore attivo con questa Partita IVA');
       }
-    });
-    if (existingFiscal) {
-      throw new HttpException(400, 'Codice fiscale già registrato');
     }
-  }
 
-  // Verifica bacino se modificato
-  if (data.basinId && data.basinId !== contributor.basinId) {
-    const basin = await prisma.basin.findUnique({
-      where: { id: data.basinId }
-    });
-    if (!basin) {
-      throw new HttpException(404, 'Bacino non trovato');
+    // Verifica che il bacino esista (se viene modificato)
+    if (data.basinId && data.basinId !== existingContributor.basinId) {
+      const basin = await prisma.basin.findUnique({
+        where: { id: data.basinId }
+      });
+
+      if (!basin) {
+        throw new HttpException(404, 'Bacino non trovato');
+      }
     }
-  }
 
-  // Verifica tipologie materiali se modificate
-  if (data.authorizedMaterialTypes && data.authorizedMaterialTypes.length > 0) {
-    const materialTypes = await prisma.materialType.findMany({
-      where: {
-        code: {
-          in: data.authorizedMaterialTypes
+    // CORREZIONE: Prepara i dati per l'aggiornamento con gestione corretta delle relazioni
+    const updateData: Prisma.ContributorUpdateInput = {};
+    
+    // Copia tutti i campi semplici
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.vatNumber !== undefined) updateData.vatNumber = data.vatNumber;
+    if (data.fiscalCode !== undefined) updateData.fiscalCode = data.fiscalCode;
+    if (data.address !== undefined) updateData.address = data.address;
+    if (data.city !== undefined) updateData.city = data.city;
+    if (data.zipCode !== undefined) updateData.zipCode = data.zipCode;
+    if (data.province !== undefined) updateData.province = data.province;
+    if (data.phone !== undefined) updateData.phone = data.phone;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.contactPerson !== undefined) updateData.contactPerson = data.contactPerson;
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    
+    // CORREZIONE: Gestione corretta della relazione con Basin
+    if (data.basinId !== undefined) {
+      if (data.basinId === null || data.basinId === '') {
+        // Disconnetti il bacino
+        updateData.basin = { disconnect: true };
+      } else {
+        // Connetti al nuovo bacino
+        updateData.basin = { connect: { id: data.basinId } };
+      }
+    }
+    
+    // Gestione speciale per authorizedMaterialTypes
+    if (data.authorizedMaterialTypes !== undefined) {
+      updateData.authorizedMaterialTypes = JSON.stringify(data.authorizedMaterialTypes);
+    }
+
+    // Aggiorna il conferitore
+    const contributor = await prisma.contributor.update({
+      where: { id },
+      data: updateData,
+      include: {
+        basin: {
+          include: {
+            client: true
+          }
         }
       }
     });
 
-    if (materialTypes.length !== data.authorizedMaterialTypes.length) {
-      const foundCodes = materialTypes.map(mt => mt.code);
-      const missingCodes = data.authorizedMaterialTypes.filter(code => !foundCodes.includes(code));
-      throw new HttpException(400, `Tipologie materiali non trovate: ${missingCodes.join(', ')}`);
+    return contributor;
+  } catch (error) {
+    if (error instanceof HttpException) {
+      throw error;
     }
+    console.error('Errore in updateContributor:', error);
+    throw new HttpException(500, 'Errore durante l\'aggiornamento del conferitore');
   }
-
-  // Prepara i dati base per l'aggiornamento
-  const updateData: Prisma.ContributorUpdateInput = {};
-
-  // Aggiungi solo i campi che sono stati forniti
-  if (data.name !== undefined) updateData.name = data.name;
-  if (data.vatNumber !== undefined) updateData.vatNumber = data.vatNumber;
-  if (data.fiscalCode !== undefined) updateData.fiscalCode = data.fiscalCode;
-  if (data.address !== undefined) updateData.address = data.address;
-  if (data.city !== undefined) updateData.city = data.city;
-  if (data.zipCode !== undefined) updateData.zipCode = data.zipCode;
-  if (data.province !== undefined) updateData.province = data.province;
-  if (data.phone !== undefined) updateData.phone = data.phone;
-  if (data.email !== undefined) updateData.email = data.email;
-  if (data.contactPerson !== undefined) updateData.contactPerson = data.contactPerson;
-  if (data.notes !== undefined) updateData.notes = data.notes;
-  if (data.isActive !== undefined) updateData.isActive = data.isActive;
-
-  // Gestione relazione bacino usando la sintassi Prisma corretta
-  if (data.basinId !== undefined) {
-    if (data.basinId === null || data.basinId === '') {
-      // Disconnetti il bacino
-      updateData.basin = { disconnect: true };
-    } else {
-      // Connetti al nuovo bacino
-      updateData.basin = { connect: { id: data.basinId } };
-    }
-  }
-  
-  // Gestione tipologie materiali autorizzate
-  if (data.authorizedMaterialTypes) {
-    updateData.authorizedMaterialTypes = JSON.stringify(data.authorizedMaterialTypes);
-  }
-
-  return prisma.contributor.update({
-    where: { id },
-    data: updateData,
-    include: {
-      basin: true
-    }
-  });
 };
 
 export const deleteContributor = async (id: string) => {
-  const contributor = await prisma.contributor.findUnique({
-    where: { id },
-    include: {
-      _count: {
-        select: {
-          deliveries: true
+  try {
+    const contributor = await prisma.contributor.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            deliveries: true
+          }
         }
       }
+    });
+
+    if (!contributor) {
+      throw new HttpException(404, 'Conferitore non trovato');
     }
-  });
 
-  if (!contributor) {
-    throw new HttpException(404, 'Conferitore non trovato');
+    // Se ha conferimenti associati, disattiva invece di eliminare
+    if (contributor._count.deliveries > 0) {
+      return prisma.contributor.update({
+        where: { id },
+        data: { 
+          isActive: false,
+          notes: (contributor.notes || '') + `\n[DISATTIVATO il ${new Date().toLocaleDateString('it-IT')}]`
+        }
+      });
+    } else {
+      // Se non ha conferimenti, elimina fisicamente
+      return prisma.contributor.delete({
+        where: { id }
+      });
+    }
+  } catch (error) {
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    console.error('Errore in deleteContributor:', error);
+    throw new HttpException(500, 'Errore durante l\'eliminazione del conferitore');
   }
-
-  // Non permettere cancellazione se ha conferimenti
-  if (contributor._count.deliveries > 0) {
-    throw new HttpException(400, 'Impossibile eliminare un conferitore con conferimenti registrati. Disattivarlo invece.');
-  }
-
-  return prisma.contributor.delete({
-    where: { id }
-  });
 };
-
-// ================================
-// SERVIZI AGGREGAZIONI E STATISTICHE
-// ================================
 
 export const getContributorsByMaterialType = async (materialTypeCode: string) => {
-  const contributors = await prisma.contributor.findMany({
-    where: {
-      isActive: true
-    },
-    include: {
-      basin: true
-    },
-    orderBy: {
-      name: 'asc'
-    }
-  });
+  try {
+    const contributors = await prisma.contributor.findMany({
+      where: {
+        authorizedMaterialTypes: {
+          contains: materialTypeCode
+        },
+        isActive: true
+      },
+      include: {
+        basin: {
+          include: {
+            client: true
+          }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
 
-  // Filtra per tipologia autorizzata
-  return contributors.filter(contributor => {
-    const authorizedTypes = JSON.parse(contributor.authorizedMaterialTypes || '[]');
-    return authorizedTypes.includes(materialTypeCode);
-  });
+    return contributors;
+  } catch (error) {
+    console.error('Errore in getContributorsByMaterialType:', error);
+    throw new HttpException(500, 'Errore durante il recupero dei conferitori per tipologia');
+  }
 };
 
-interface ContributorStatistics {
-  contributor: {
-    id: string;
-    name: string;
-    isActive: boolean;
-  };
-  year: number;
-  totals: {
-    totalWeight: number;
-    totalDeliveries: number;
-    uniqueMaterialTypes: number;
-  };
-  materialTypeBreakdown: Array<{
-    materialTypeId: string;
-    materialTypeName: string;
-    totalWeight: number;
-    deliveriesCount: number;
-    averageWeight: number;
-    lastDeliveryDate: Date | null;
-  }>;
-  monthlyTrend: Array<{
-    month: number;
-    totalWeight: number;
-    deliveriesCount: number;
-  }>;
-  firstDeliveryDate: Date | null;
-  lastDeliveryDate: Date | null;
-}
+export const getContributorStatistics = async (id: string, year?: number): Promise<ContributorStatistics> => {
+  try {
+    const currentYear = year || new Date().getFullYear();
+    
+    // Verifica che il conferitore esista
+    const contributor = await prisma.contributor.findUnique({
+      where: { id }
+    });
 
-export const getContributorStatistics = async (contributorId: string, year?: number): Promise<ContributorStatistics> => {
-  const contributor = await prisma.contributor.findUnique({
-    where: { id: contributorId }
-  });
-
-  if (!contributor) {
-    throw new HttpException(404, 'Conferitore non trovato');
-  }
-
-  const currentYear = year || new Date().getFullYear();
-  const startDate = new Date(currentYear, 0, 1); // 1 gennaio
-  const endDate = new Date(currentYear, 11, 31, 23, 59, 59); // 31 dicembre
-
-  const deliveries = await prisma.delivery.findMany({
-    where: {
-      contributorId,
-      date: {
-        gte: startDate,
-        lte: endDate
-      }
-    },
-    include: {
-      materialType: true
-    },
-    orderBy: {
-      date: 'asc'
+    if (!contributor) {
+      throw new HttpException(404, 'Conferitore non trovato');
     }
-  });
 
-  // Calcola statistiche per tipologia
-  const materialTypeStats = new Map<string, {
-    materialTypeId: string;
-    materialTypeName: string;
-    totalWeight: number;
-    deliveriesCount: number;
-    averageWeight: number;
-    lastDeliveryDate: Date | null;
-  }>();
+    // Recupera i conferimenti dell'anno
+    const deliveries = await prisma.delivery.findMany({
+      where: {
+        contributorId: id,
+        date: {
+          gte: new Date(currentYear, 0, 1),
+          lte: new Date(currentYear, 11, 31, 23, 59, 59)
+        }
+      },
+      include: {
+        materialType: true
+      },
+      orderBy: { date: 'asc' }
+    });
 
-  deliveries.forEach(delivery => {
-    const key = delivery.materialTypeId;
-    if (!materialTypeStats.has(key)) {
-      materialTypeStats.set(key, {
-        materialTypeId: key,
-        materialTypeName: delivery.materialType.name,
-        totalWeight: 0,
-        deliveriesCount: 0,
-        averageWeight: 0,
-        lastDeliveryDate: null
+    // Calcola statistiche generali
+    const totalWeight = deliveries.reduce((sum, d) => sum + d.weight, 0);
+    const totalDeliveries = deliveries.length;
+    const averageDeliveryWeight = totalDeliveries > 0 ? totalWeight / totalDeliveries : 0;
+
+    // Raggruppa per tipologia materiale
+    const byMaterial = deliveries.reduce((acc, d) => {
+      const key = d.materialType.name;
+      if (!acc[key]) {
+        acc[key] = { weight: 0, count: 0 };
+      }
+      acc[key].weight += d.weight;
+      acc[key].count += 1;
+      return acc;
+    }, {} as Record<string, { weight: number; count: number }>);
+
+    // Raggruppa per mese
+    const monthlyData = deliveries.reduce((acc, d) => {
+      const monthKey = d.date.toISOString().substring(0, 7); // YYYY-MM
+      if (!acc[monthKey]) {
+        acc[monthKey] = { weight: 0, deliveries: 0 };
+      }
+      acc[monthKey].weight += d.weight;
+      acc[monthKey].deliveries += 1;
+      return acc;
+    }, {} as Record<string, { weight: number; deliveries: number }>);
+
+    // Crea trend mensile completo (tutti i 12 mesi)
+    const monthlyTrend = [];
+    for (let month = 0; month < 12; month++) {
+      const monthKey = `${currentYear}-${(month + 1).toString().padStart(2, '0')}`;
+      const monthData = monthlyData[monthKey] || { weight: 0, deliveries: 0 };
+      
+      monthlyTrend.push({
+        month: monthKey,
+        weight: monthData.weight,
+        deliveries: monthData.deliveries
       });
     }
 
-    const stats = materialTypeStats.get(key)!;
-    stats.totalWeight += delivery.weight;
-    stats.deliveriesCount += 1;
-    stats.lastDeliveryDate = delivery.date;
-  });
-
-  // Calcola medie
-  const materialStats = Array.from(materialTypeStats.values()).map(stats => ({
-    ...stats,
-    averageWeight: stats.totalWeight / stats.deliveriesCount
-  }));
-
-  return {
-    contributor: {
-      id: contributor.id,
-      name: contributor.name,
-      isActive: contributor.isActive
-    },
-    year: currentYear,
-    totals: {
-      totalWeight: deliveries.reduce((sum, d) => sum + d.weight, 0),
-      totalDeliveries: deliveries.length,
-      uniqueMaterialTypes: materialTypeStats.size
-    },
-    materialTypeBreakdown: materialStats,
-    monthlyTrend: getMonthlyTrend(deliveries),
-    firstDeliveryDate: deliveries.length > 0 ? deliveries[0].date : null,
-    lastDeliveryDate: deliveries.length > 0 ? deliveries[deliveries.length - 1].date : null
-  };
-};
-
-// Funzione helper per calcolare trend mensile
-interface DeliveryWithDate {
-  date: Date;
-  weight: number;
-}
-
-function getMonthlyTrend(deliveries: DeliveryWithDate[]) {
-  const monthlyData = new Map<number, {
-    month: number;
-    totalWeight: number;
-    deliveriesCount: number;
-  }>();
-
-  // Inizializza tutti i mesi
-  for (let month = 0; month < 12; month++) {
-    const monthKey = month + 1; // 1-12
-    monthlyData.set(monthKey, {
-      month: monthKey,
-      totalWeight: 0,
-      deliveriesCount: 0
-    });
+    return {
+      year: currentYear,
+      totalWeight,
+      totalDeliveries,
+      byMaterial,
+      monthlyTrend,
+      averageDeliveryWeight
+    };
+  } catch (error) {
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    console.error('Errore in getContributorStatistics:', error);
+    throw new HttpException(500, 'Errore durante il calcolo delle statistiche del conferitore');
   }
-
-  // Aggrega i dati
-  deliveries.forEach(delivery => {
-    const month = delivery.date.getMonth() + 1;
-    const data = monthlyData.get(month)!;
-    data.totalWeight += delivery.weight;
-    data.deliveriesCount += 1;
-  });
-
-  return Array.from(monthlyData.values());
-}
+};

@@ -22,7 +22,37 @@ import {
   startOfWeek, 
   endOfWeek 
 } from 'date-fns';
-import type { MonthlyCalendarData, MaterialType } from '../types/deliveries.types';
+import type { MaterialType } from '../types/deliveries.types';
+
+// CORREZIONE: Interfacce locali per i dati del calendario
+interface MaterialBreakdown {
+  materialTypeId: string;
+  materialTypeName: string;
+  totalWeight: number;
+  deliveryCount: number;
+}
+
+interface DayDeliveryData {
+  date: string;
+  hasDeliveries: boolean;
+  totalWeight: number;
+  totalDeliveries: number;
+  materialsBreakdown: MaterialBreakdown[];
+}
+
+interface MonthlyTotals {
+  totalDeliveries: number;
+  totalWeight: number;
+  materialTypeBreakdown: MaterialBreakdown[];
+  averageDailyWeight: number;
+}
+
+interface MonthlyCalendarData {
+  year: number;
+  month: number;
+  days: DayDeliveryData[];
+  monthlyTotals: MonthlyTotals;
+}
 
 interface CalendarGridProps {
   calendarData?: MonthlyCalendarData;
@@ -50,13 +80,13 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
     end: calendarEnd
   });
 
-  // Nomi dei giorni della settimana
+  // Nomi dei giorni della settimana - CORREZIONE: tipo string esplicito
   const weekDays: string[] = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 
   // Trova i dati per una specifica data
   const getDayData = (date: Date) => {
     const dateString = format(date, 'yyyy-MM-dd');
-    return calendarData?.days.find(day => day.date === dateString);
+    return calendarData?.days.find((day: DayDeliveryData) => day.date === dateString);
   };
 
   // Colore della cella basato sui conferimenti
@@ -170,7 +200,7 @@ const CalendarGrid: React.FC<CalendarGridProps> = ({
                   {/* Indicatori tipologie materiali */}
                   {dayData?.materialsBreakdown && dayData.materialsBreakdown.length > 0 && (
                     <Stack spacing={0.5}>
-                      {dayData.materialsBreakdown.slice(0, 3).map((material: any) => {
+                      {dayData.materialsBreakdown.slice(0, 3).map((material: MaterialBreakdown) => {
                         const materialType = materialTypes.find(mt => mt.id === material.materialTypeId);
                         return (
                           <Box

@@ -2,7 +2,7 @@
 
 import { PrismaClient, Prisma } from '@prisma/client';
 import { HttpException } from '../../../core/middleware/error.middleware';
-import { startOfMonth, endOfMonth, startOfDay, endOfDay, format } from 'date-fns';
+import { startOfMonth, endOfMonth, startOfDay, endOfDay, format, isValid, parseISO } from 'date-fns';
 
 const prisma = new PrismaClient();
 
@@ -418,37 +418,98 @@ export const getMonthlyCalendarData = async (
   };
 };
 
+// CORRETTO: Fix della funzione getDayDeliveries
 export const getDayDeliveries = async (date: string, materialTypeId?: string) => {
-  const startDate = startOfDay(new Date(date));
-  const endDate = endOfDay(new Date(date));
-
-  const where: Prisma.DeliveryWhereInput = {
-    date: {
-      gte: startDate,
-      lte: endDate
+  try {
+    console.log('getDayDeliveries chiamata con:', { date, materialTypeId });
+    
+    // CORRETTO: Validazione e parsing della data
+    if (!date || typeof date !== 'string') {
+      throw new HttpException(400, 'Data non valida: parametro date mancante o formato errato');
     }
-  };
 
-  if (materialTypeId) where.materialTypeId = materialTypeId;
+    // Verifica formato data ISO (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      throw new HttpException(400, 'Formato data non valido. Utilizzare il formato YYYY-MM-DD');
+    }
 
-  return prisma.delivery.findMany({
-    where,
-    include: {
-      contributor: {
-        include: {
-          basin: true
+    // Parse della data e validazione
+    const parsedDate = parseISO(date);
+    if (!isValid(parsedDate)) {
+      throw new HttpException(400, 'Data non valida: impossibile parsare la data fornita');
+    }
+
+    const startDate = startOfDay(parsedDate);
+    const endDate = endOfDay(parsedDate);
+
+    console.log('Range date calcolato:', { startDate, endDate });
+
+    // Costruisci la query
+    const where: Prisma.DeliveryWhereInput = {
+      date: {
+        gte: startDate,
+        lte: endDate
+      }
+    };
+
+    // Aggiungi filtro per tipologia materiale se fornito
+    if (materialTypeId && materialTypeId.trim() !== '') {
+      // Verifica che la tipologia materiale esista
+      const materialType = await prisma.materialType.findUnique({
+        where: { id: materialTypeId }
+      });
+      
+      if (!materialType) {
+        throw new HttpException(404, 'Tipologia materiale non trovata');
+      }
+      
+      where.materialTypeId = materialTypeId;
+    }
+
+    console.log('Query where costruita:', JSON.stringify(where, null, 2));
+
+    // Esegui la query
+    const deliveries = await prisma.delivery.findMany({
+      where,
+      include: {
+        contributor: {
+          include: {
+            basin: true
+          }
+        },
+        materialType: {
+          include: {
+            parent: true
+          }
         }
       },
-      materialType: {
-        include: {
-          parent: true
-        }
-      }
-    },
-    orderBy: [
-      { materialType: { sortOrder: 'asc' } },
-      { contributor: { name: 'asc' } },
-      { createdAt: 'desc' }
-    ]
-  });
+      orderBy: [
+        { materialType: { sortOrder: 'asc' } },
+        { contributor: { name: 'asc' } },
+        { createdAt: 'desc' }
+      ]
+    });
+
+    console.log(`Trovati ${deliveries.length} conferimenti per la data ${date}`);
+
+    return deliveries;
+
+  } catch (error) {
+    console.error('Errore in getDayDeliveries:', error);
+    
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    
+    // Log dettagliato per debug
+    console.error('Dettagli errore:', {
+      message: error instanceof Error ? error.message : 'Errore sconosciuto',
+      stack: error instanceof Error ? error.stack : undefined,
+      inputDate: date,
+      inputMaterialTypeId: materialTypeId
+    });
+    
+    throw new HttpException(500, 'Errore interno durante il recupero dei conferimenti del giorno');
+  }
 };

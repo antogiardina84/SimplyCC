@@ -5,50 +5,52 @@ import type {
   Contributor, 
   CreateContributorData, 
   UpdateContributorData, 
-  ContributorFilters 
+  ContributorFilters,
+  ContributorStatistics 
 } from '../types/deliveries.types';
 
 export const contributorsApi = {
-  getAll: async (filters?: ContributorFilters): Promise<Contributor[]> => {
+  // Ottieni tutti i conferitori con filtri
+  getAll: (filters?: ContributorFilters): Promise<Contributor[]> => {
     const params = new URLSearchParams();
     if (filters?.search) params.append('search', filters.search);
     if (filters?.basinId) params.append('basinId', filters.basinId);
     if (filters?.materialTypeCode) params.append('materialTypeCode', filters.materialTypeCode);
     if (filters?.isActive !== undefined) params.append('isActive', filters.isActive.toString());
 
-    const response = await api.get(`/contributors?${params.toString()}`);
-    return response.data;
+    return api.get(`/contributors?${params.toString()}`).then(res => res.data);
   },
 
-  getById: async (id: string): Promise<Contributor> => {
-    const response = await api.get(`/contributors/${id}`);
-    return response.data;
+  // Ottieni conferitore per ID
+  getById: (id: string): Promise<Contributor> => {
+    return api.get(`/contributors/${id}`).then(res => res.data);
   },
 
-  create: async (data: CreateContributorData): Promise<Contributor> => {
-    const response = await api.post('/contributors', data);
-    return response.data;
+  // Crea nuovo conferitore
+  create: (data: CreateContributorData): Promise<Contributor> => {
+    return api.post('/contributors', data).then(res => res.data);
   },
 
-  update: async (id: string, data: UpdateContributorData): Promise<Contributor> => {
-    const response = await api.put(`/contributors/${id}`, data);
-    return response.data;
+  // Aggiorna conferitore
+  update: (id: string, data: UpdateContributorData): Promise<Contributor> => {
+    return api.put(`/contributors/${id}`, data).then(res => res.data);
   },
 
-  delete: async (id: string): Promise<void> => {
-    await api.delete(`/contributors/${id}`);
+  // Elimina conferitore
+  delete: (id: string): Promise<void> => {
+    return api.delete(`/contributors/${id}`).then(res => res.data);
   },
 
-  getByMaterialType: async (materialTypeCode: string): Promise<Contributor[]> => {
-    const response = await api.get(`/contributors/by-material/${materialTypeCode}`);
-    return response.data;
+  // Ottieni conferitori per tipologia materiale
+  getByMaterialType: (materialTypeCode: string): Promise<Contributor[]> => {
+    return api.get(`/contributors/by-material/${materialTypeCode}`).then(res => res.data);
   },
 
-  getStatistics: async (id: string, year?: number): Promise<any> => {
+  // Ottieni statistiche conferitore
+  getStatistics: (id: string, year?: number): Promise<ContributorStatistics> => {
     const params = new URLSearchParams();
     if (year) params.append('year', year.toString());
-
-    const response = await api.get(`/contributors/${id}/statistics?${params.toString()}`);
-    return response.data;
+    
+    return api.get(`/contributors/${id}/statistics?${params.toString()}`).then(res => res.data);
   }
 };

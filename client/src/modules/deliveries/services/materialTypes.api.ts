@@ -5,56 +5,56 @@ import type {
   MaterialType, 
   MaterialTypeHierarchy,
   CreateMaterialTypeData, 
-  UpdateMaterialTypeData 
+  UpdateMaterialTypeData, 
+  MaterialTypesFilters,
+  MaterialTypeStatistics 
 } from '../types/deliveries.types';
 
-interface MaterialTypesFilters {
-  includeInactive?: boolean;
-}
-
 export const materialTypesApi = {
-  getAll: async (filters?: MaterialTypesFilters): Promise<MaterialType[]> => {
+  // Ottieni tutte le tipologie materiali
+  getAll: (filters?: MaterialTypesFilters): Promise<MaterialType[]> => {
     const params = new URLSearchParams();
-    if (filters?.includeInactive) params.append('includeInactive', 'true');
+    if (filters?.includeInactive !== undefined) params.append('includeInactive', filters.includeInactive.toString());
+    if (filters?.isParent !== undefined) params.append('isParent', filters.isParent.toString());
 
-    const response = await api.get(`/material-types?${params.toString()}`);
-    return response.data;
+    return api.get(`/material-types?${params.toString()}`).then(res => res.data);
   },
 
-  getById: async (id: string): Promise<MaterialType> => {
-    const response = await api.get(`/material-types/${id}`);
-    return response.data;
+  // Ottieni tipologia per ID
+  getById: (id: string): Promise<MaterialType> => {
+    return api.get(`/material-types/${id}`).then(res => res.data);
   },
 
-  getByCode: async (code: string): Promise<MaterialType> => {
-    const response = await api.get(`/material-types/code/${code}`);
-    return response.data;
+  // Ottieni tipologia per codice
+  getByCode: (code: string): Promise<MaterialType> => {
+    return api.get(`/material-types/code/${code}`).then(res => res.data);
   },
 
-  create: async (data: CreateMaterialTypeData): Promise<MaterialType> => {
-    const response = await api.post('/material-types', data);
-    return response.data;
+  // Ottieni struttura gerarchica
+  getHierarchy: (): Promise<MaterialTypeHierarchy[]> => {
+    return api.get('/material-types/hierarchy').then(res => res.data);
   },
 
-  update: async (id: string, data: UpdateMaterialTypeData): Promise<MaterialType> => {
-    const response = await api.put(`/material-types/${id}`, data);
-    return response.data;
+  // Crea nuova tipologia
+  create: (data: CreateMaterialTypeData): Promise<MaterialType> => {
+    return api.post('/material-types', data).then(res => res.data);
   },
 
-  delete: async (id: string): Promise<void> => {
-    await api.delete(`/material-types/${id}`);
+  // Aggiorna tipologia
+  update: (id: string, data: UpdateMaterialTypeData): Promise<MaterialType> => {
+    return api.put(`/material-types/${id}`, data).then(res => res.data);
   },
 
-  getHierarchy: async (): Promise<MaterialTypeHierarchy[]> => {
-    const response = await api.get('/material-types/hierarchy');
-    return response.data;
+  // Elimina tipologia
+  delete: (id: string): Promise<void> => {
+    return api.delete(`/material-types/${id}`).then(res => res.data);
   },
 
-  getStatistics: async (id: string, year?: number): Promise<any> => {
+  // Ottieni statistiche tipologia
+  getStatistics: (id: string, year?: number): Promise<MaterialTypeStatistics> => {
     const params = new URLSearchParams();
     if (year) params.append('year', year.toString());
-
-    const response = await api.get(`/material-types/${id}/statistics?${params.toString()}`);
-    return response.data;
+    
+    return api.get(`/material-types/${id}/statistics?${params.toString()}`).then(res => res.data);
   }
 };

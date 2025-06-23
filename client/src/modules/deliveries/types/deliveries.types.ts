@@ -1,5 +1,63 @@
 // client/src/modules/deliveries/types/deliveries.types.ts
 
+// ================================
+// CONTRIBUTOR TYPES
+// ================================
+export interface Contributor {
+  id: string;
+  name: string;
+  vatNumber?: string;
+  fiscalCode?: string;
+  address?: string;
+  city?: string;
+  zipCode?: string;
+  province?: string;
+  phone?: string;
+  email?: string;
+  contactPerson?: string;
+  basinId?: string;
+  basin?: {
+    id: string;
+    code: string;
+    description?: string;
+  };
+  authorizedMaterialTypes: string; // JSON string array
+  isActive: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateContributorData {
+  name: string;
+  vatNumber?: string;
+  fiscalCode?: string;
+  address?: string;
+  city?: string;
+  zipCode?: string;
+  province?: string;
+  phone?: string;
+  email?: string;
+  contactPerson?: string;
+  basinId?: string;
+  authorizedMaterialTypes: string[]; // Array per il form
+  notes?: string;
+}
+
+export interface UpdateContributorData extends Partial<CreateContributorData> {
+  isActive?: boolean;
+}
+
+export interface ContributorFilters {
+  search?: string;
+  basinId?: string;
+  materialTypeCode?: string;
+  isActive?: boolean;
+}
+
+// ================================
+// MATERIAL TYPE TYPES
+// ================================
 export interface MaterialType {
   id: string;
   code: string;
@@ -18,46 +76,52 @@ export interface MaterialType {
   updatedAt: string;
 }
 
-export interface Contributor {
-  id: string;
-  name: string;
-  vatNumber?: string;
-  fiscalCode?: string;
-  address?: string;
-  city?: string;
-  zipCode?: string;
-  province?: string;
-  phone?: string;
-  email?: string;
-  contactPerson?: string;
-  basinId?: string;
-  basin?: Basin;
-  authorizedMaterialTypes: string; // JSON string
-  isActive: boolean;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
+export interface MaterialTypeHierarchy extends MaterialType {
+  children?: MaterialTypeHierarchy[];
 }
 
-export interface Basin {
-  id: string;
+export interface CreateMaterialTypeData {
   code: string;
+  name: string;
   description?: string;
-  flowType: string;
-  clientId: string;
-  createdAt: string;
-  updatedAt: string;
+  unit: string;
+  cerCode?: string;
+  reference?: string;
+  color?: string;
+  sortOrder?: number;
+  parentId?: string;
 }
 
+export interface UpdateMaterialTypeData extends Partial<CreateMaterialTypeData> {
+  isActive?: boolean;
+}
+
+export interface MaterialTypesFilters {
+  includeInactive?: boolean;
+  isParent?: boolean;
+}
+
+// ================================
+// DELIVERY TYPES
+// ================================
 export interface Delivery {
   id: string;
-  date: string;
+  date: string; // CORREZIONE: cambiato da deliveryDate a date
   contributorId: string;
   contributor: Contributor;
   materialTypeId: string;
   materialType: MaterialType;
   basinId?: string;
-  basin?: Basin;
+  basin?: {
+    id: string;
+    code: string;
+    description?: string;
+  };
+  clientId?: string;
+  client?: {
+    id: string;
+    name: string;
+  };
   weight: number;
   unit: string;
   documentNumber?: string;
@@ -77,46 +141,12 @@ export interface Delivery {
   createdBy?: string;
 }
 
-export interface MaterialBreakdown {
-  materialTypeId: string;
-  materialTypeName: string;
-  totalWeight: number;
-  count: number;
-}
-
-export interface DayDeliveriesSummary {
-  date: string;
-  totalWeight: number;
-  deliveriesCount: number;
-  materialsBreakdown: MaterialBreakdown[];
-  hasDeliveries: boolean;
-}
-
-export interface MonthlyTotals {
-  totalWeight: number;
-  totalDeliveries: number;
-  materialTypeBreakdown: MaterialBreakdown[];
-}
-
-export interface MonthlyCalendarData {
-  month: string; // YYYY-MM
-  days: DayDeliveriesSummary[];
-  monthlyTotals: MonthlyTotals;
-}
-
-export interface DeliveryFilters {
-  startDate?: string;
-  endDate?: string;
-  contributorId?: string;
-  materialTypeId?: string;
-  basinId?: string;
-  isValidated?: boolean;
-}
-
 export interface CreateDeliveryData {
-  date: string;
+  date: string; // CORREZIONE: cambiato da deliveryDate a date
   contributorId: string;
   materialTypeId: string;
+  basinId?: string;
+  clientId?: string;
   weight: number;
   unit?: string;
   documentNumber?: string;
@@ -125,56 +155,86 @@ export interface CreateDeliveryData {
   quality?: string;
   moistureLevel?: string;
   contaminationLevel?: string;
+  documents?: string;
+  photos?: string;
   notes?: string;
 }
 
 export interface UpdateDeliveryData extends Partial<CreateDeliveryData> {
   isValidated?: boolean;
+  validatedBy?: string;
+  validatedAt?: string;
 }
 
-export interface ContributorFilters {
-  search?: string;
+export interface DeliveryFilters {
+  startDate?: Date;
+  endDate?: Date;
+  contributorId?: string;
+  materialTypeId?: string;
   basinId?: string;
-  materialTypeCode?: string;
-  isActive?: boolean;
+  isValidated?: boolean;
 }
 
-export interface CreateContributorData {
-  name: string;
-  vatNumber?: string;
-  fiscalCode?: string;
-  address?: string;
-  city?: string;
-  zipCode?: string;
-  province?: string;
-  phone?: string;
-  email?: string;
-  contactPerson?: string;
-  basinId?: string;
-  authorizedMaterialTypes: string[];
-  notes?: string;
+// ================================
+// CALENDAR TYPES
+// ================================
+export interface DayDeliveryData {
+  date: string;
+  hasDeliveries: boolean;
+  totalWeight: number;
+  totalDeliveries: number;
+  materialsBreakdown: MaterialBreakdown[];
 }
 
-export interface UpdateContributorData extends Partial<CreateContributorData> {
-  isActive?: boolean;
+export interface MaterialBreakdown {
+  materialTypeId: string;
+  materialTypeName: string;
+  totalWeight: number;
+  deliveryCount: number;
 }
 
-export interface CreateMaterialTypeData {
-  code: string;
-  name: string;
-  description?: string;
-  unit?: string;
-  cerCode?: string;
-  reference?: string;
-  color?: string;
-  sortOrder?: number;
-  parentId?: string;
+export interface MonthlyTotals {
+  totalDeliveries: number;
+  totalWeight: number;
+  materialTypeBreakdown: MaterialBreakdown[];
+  averageDailyWeight: number;
 }
 
-export interface UpdateMaterialTypeData extends Partial<CreateMaterialTypeData> {
-  isActive?: boolean;
+export interface MonthlyCalendarData {
+  year: number;
+  month: number;
+  days: DayDeliveryData[];
+  monthlyTotals: MonthlyTotals;
 }
 
-export interface MaterialTypeHierarchy extends MaterialType {
-  children: MaterialTypeHierarchy[];
+// ================================
+// STATISTICS TYPES
+// ================================
+export interface ContributorStatistics {
+  contributorId: string;
+  contributorName: string;
+  totalDeliveries: number;
+  totalWeight: number;
+  averageWeight: number;
+  lastDeliveryDate: string;
+  materialTypeBreakdown: MaterialBreakdown[];
+  monthlyData: Array<{
+    month: string;
+    deliveries: number;
+    weight: number;
+  }>;
+}
+
+export interface MaterialTypeStatistics {
+  materialTypeId: string;
+  materialTypeName: string;
+  totalDeliveries: number;
+  totalWeight: number;
+  averageWeight: number;
+  contributorCount: number;
+  monthlyData: Array<{
+    month: string;
+    deliveries: number;
+    weight: number;
+  }>;
 }

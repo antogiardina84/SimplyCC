@@ -1,7 +1,7 @@
-// server/src/modules/deliveries/controllers/index.ts - VERSIONE AGGIORNATA
+// server/src/modules/deliveries/controllers/index.ts - DEBUG VERSION
 
 import { Request, Response, NextFunction } from 'express';
-import { AuthRequest } from '../../../core/middleware/auth.middleware'; // Usa la tua interfaccia
+import { AuthRequest } from '../../../core/middleware/auth.middleware';
 import * as deliveriesService from '../services/deliveries.service';
 import * as contributorsService from '../services/contributors.service';
 import * as materialTypesService from '../services/materialTypes.service';
@@ -42,7 +42,7 @@ export const createDelivery = async (req: AuthRequest, res: Response, next: Next
   try {
     const deliveryData = {
       ...req.body,
-      createdBy: req.user?.id // Usa la tua interfaccia AuthRequest
+      createdBy: req.user?.id
     };
     
     const delivery = await deliveriesService.createDelivery(deliveryData);
@@ -83,7 +83,7 @@ export const validateDelivery = async (req: AuthRequest, res: Response, next: Ne
     
     const delivery = await deliveriesService.updateDelivery(id, {
       isValidated: true,
-      validatedBy: req.user?.id // Usa la tua interfaccia AuthRequest
+      validatedBy: req.user?.id
     });
     
     res.status(200).json(delivery);
@@ -93,21 +93,33 @@ export const validateDelivery = async (req: AuthRequest, res: Response, next: Ne
 };
 
 // ================================
-// CONTROLLER CALENDARIO
+// CONTROLLER CALENDARIO - DEBUG VERSION
 // ================================
 
 export const getMonthlyCalendar = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    console.log('🗓️ getMonthlyCalendar chiamata');
+    console.log('📋 Parametri ricevuti:', req.params);
+    console.log('📋 Query ricevuti:', req.query);
+
     const year = parseInt(req.params.year);
     const month = parseInt(req.params.month);
     const materialTypeId = req.query.materialTypeId as string;
     const basinId = req.query.basinId as string;
 
+    console.log('📋 Parametri parsati:', { year, month, materialTypeId, basinId });
+
     if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-      res.status(400).json({ message: 'Anno e mese non validi' });
+      console.log('❌ Parametri non validi:', { year, month });
+      res.status(400).json({ 
+        message: 'Anno e mese non validi',
+        received: { year, month },
+        expected: 'year: number, month: 1-12'
+      });
       return;
     }
 
+    console.log('✅ Parametri validi, chiamata al service...');
     const calendarData = await deliveriesService.getMonthlyCalendarData(
       year, 
       month, 
@@ -115,20 +127,81 @@ export const getMonthlyCalendar = async (req: Request, res: Response, next: Next
       basinId
     );
     
+    console.log('✅ Dati calendario ottenuti:', {
+      month: calendarData.month,
+      giorni: calendarData.days.length,
+      totaleConferimenti: calendarData.monthlyTotals.totalDeliveries
+    });
+    
     res.status(200).json(calendarData);
   } catch (error) {
+    console.error('❌ Errore in getMonthlyCalendar:', error);
     next(error);
   }
 };
 
 export const getDayDeliveries = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    console.log('📅 getDayDeliveries chiamata');
+    console.log('📋 URL completa:', req.originalUrl);
+    console.log('📋 Parametri ricevuti:', req.params);
+    console.log('📋 Query ricevuti:', req.query);
+    console.log('📋 Headers ricevuti:', req.headers);
+
     const { date } = req.params; // Format: YYYY-MM-DD
     const materialTypeId = req.query.materialTypeId as string;
 
+    console.log('📋 Parametri estratti:', { date, materialTypeId });
+
+    // VALIDAZIONE MIGLIORATA
+    if (!date) {
+      console.log('❌ Parametro date mancante');
+      res.status(400).json({ 
+        message: 'Parametro date mancante',
+        received: { date },
+        expected: 'YYYY-MM-DD format'
+      });
+      return;
+    }
+
+    // Verifica formato data
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      console.log('❌ Formato data non valido:', date);
+      res.status(400).json({ 
+        message: 'Formato data non valido',
+        received: date,
+        expected: 'YYYY-MM-DD format',
+        example: '2025-06-19'
+      });
+      return;
+    }
+
+    // Verifica che la data sia valida
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) {
+      console.log('❌ Data non valida:', date);
+      res.status(400).json({ 
+        message: 'Data non valida',
+        received: date,
+        parsed: parsedDate
+      });
+      return;
+    }
+
+    console.log('✅ Parametri validi, chiamata al service...');
     const deliveries = await deliveriesService.getDayDeliveries(date, materialTypeId);
+    
+    console.log('✅ Conferimenti ottenuti:', {
+      data: date,
+      count: deliveries.length,
+      tipologie: deliveries.map(d => d.materialType?.name).filter(Boolean)
+    });
+    
     res.status(200).json(deliveries);
   } catch (error) {
+    console.error('❌ Errore in getDayDeliveries:', error);
+    console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'No stack');
     next(error);
   }
 };

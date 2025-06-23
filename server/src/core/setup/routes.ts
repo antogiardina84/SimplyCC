@@ -1,4 +1,4 @@
-// server/src/core/setup/routes.ts
+// server/src/core/setup/routes.ts - VERSIONE CORRETTA
 
 import { Express } from 'express';
 
@@ -12,10 +12,12 @@ import { shipmentRoutes } from '../../modules/shipments/routes';
 import { logisticsRoutes } from '../../modules/shipments/routes/logistics.routes';
 import { dashboardRoutes } from '../../modules/dashboard/routes';
 
-// NUOVO: Import delle routes per conferimenti
+// CORRETTO: Import delle routes per conferimenti
 import { deliveriesRoutes } from '../../modules/deliveries/routes';
 
 export const setupRoutes = (app: Express, apiPrefix: string): void => {
+  console.log('🚀 Setting up routes with prefix:', apiPrefix);
+
   // Health check
   app.get(`${apiPrefix}/health`, (req, res) => {
     res.status(200).json({ 
@@ -23,15 +25,9 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
       timestamp: new Date(),
       version: '1.0.0',
       modules: [
-        'auth',
-        'users', 
-        'clients',
-        'basins',
-        'pickup-orders',
-        'shipments',
-        'logistics',
-        'dashboard',
-        'deliveries' // AGGIUNTO
+        'auth', 'users', 'clients', 'basins',
+        'pickup-orders', 'shipments', 'logistics',
+        'dashboard', 'deliveries'
       ]
     });
   });
@@ -40,65 +36,90 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
   // CORE ROUTES
   // ================================
   
-  // Autenticazione e gestione utenti
+  console.log('📝 Setting up auth routes...');
   app.use(`${apiPrefix}/auth`, authRoutes);
+  
+  console.log('👥 Setting up user routes...');
   app.use(`${apiPrefix}/users`, userRoutes);
   
   // ================================
   // BUSINESS ROUTES
   // ================================
   
-  // Gestione anagrafica clienti e bacini
+  console.log('🏢 Setting up client routes...');
   app.use(`${apiPrefix}/clients`, clientRoutes);
+  
+  console.log('🗂️ Setting up basin routes...');
   app.use(`${apiPrefix}/basins`, basinRoutes);
   
-  // Gestione operativa: buoni di ritiro e spedizioni
+  console.log('📋 Setting up pickup order routes...');
   app.use(`${apiPrefix}/pickup-orders`, pickupOrderRoutes);
+  
+  console.log('🚚 Setting up shipment routes...');
   app.use(`${apiPrefix}/shipments`, shipmentRoutes);
   
-  // Gestione entità logistiche (mittenti/destinatari/trasportatori)
+  console.log('🏭 Setting up logistics routes...');
   app.use(`${apiPrefix}/logistics`, logisticsRoutes);
   
-  // Dashboard e reporting
+  console.log('📊 Setting up dashboard routes...');
   app.use(`${apiPrefix}/dashboard`, dashboardRoutes);
   
-  // NUOVO: Routes per conferimenti (include deliveries, contributors, material-types, calendar)
+  // ================================
+  // DELIVERIES ROUTES - CORRETTO
+  // ================================
+  
+  console.log('📦 Setting up deliveries routes...');
+  // IMPORTANTE: Questo monta tutte le routes dei conferimenti con il prefisso API
+  // Le routes in deliveriesRoutes sono già definite con i loro path specifici
   app.use(`${apiPrefix}`, deliveriesRoutes);
+  
+  // Questo significa che:
+  // - /api/deliveries -> deliveriesController.getAllDeliveries
+  // - /api/contributors -> deliveriesController.getAllContributors  
+  // - /api/material-types -> deliveriesController.getAllMaterialTypes
+  // - /api/calendar/:year/:month -> deliveriesController.getMonthlyCalendar
+  // - /api/calendar/day/:date -> deliveriesController.getDayDeliveries
   
   // ================================
   // API INFO ENDPOINT
   // ================================
   
-  // Endpoint per informazioni sulle API disponibili
   app.get(`${apiPrefix}/info`, (req, res) => {
     res.status(200).json({
       title: 'Sistema Gestione Rifiuti API',
       version: '1.0.0',
       description: 'API per la gestione automatizzata dei processi di raccolta e smaltimento rifiuti secondo allegato tecnico ANCI-COREPLA',
       endpoints: {
+        // Core endpoints
         auth: {
           base: `${apiPrefix}/auth`,
           description: 'Autenticazione e autorizzazione',
+          routes: ['POST /login', 'POST /refresh', 'POST /logout']
         },
         users: {
           base: `${apiPrefix}/users`,
           description: 'Gestione utenti del sistema',
+          routes: ['GET /', 'GET /:id', 'POST /', 'PUT /:id', 'DELETE /:id']
         },
         clients: {
           base: `${apiPrefix}/clients`,
           description: 'Gestione clienti e fornitori',
+          routes: ['GET /', 'GET /:id', 'POST /', 'PUT /:id', 'DELETE /:id']
         },
         basins: {
           base: `${apiPrefix}/basins`,
           description: 'Gestione bacini di raccolta',
+          routes: ['GET /', 'GET /:id', 'POST /', 'PUT /:id', 'DELETE /:id']
         },
         pickupOrders: {
           base: `${apiPrefix}/pickup-orders`,
           description: 'Gestione buoni di ritiro e workflow',
+          routes: ['GET /', 'GET /:id', 'POST /', 'PUT /:id', 'DELETE /:id']
         },
         shipments: {
           base: `${apiPrefix}/shipments`,
           description: 'Gestione spedizioni e calendario operativo',
+          routes: ['GET /', 'GET /:id', 'POST /', 'PUT /:id', 'DELETE /:id']
         },
         logistics: {
           base: `${apiPrefix}/logistics`,
@@ -119,8 +140,13 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
         dashboard: {
           base: `${apiPrefix}/dashboard`,
           description: 'Dashboard e KPI principali',
+          routes: ['GET /stats', 'GET /kpi', 'GET /charts']
         },
-        // NUOVO: Sezione conferimenti
+        
+        // ================================
+        // DELIVERIES ENDPOINTS - CORRETTI
+        // ================================
+        
         deliveries: {
           base: `${apiPrefix}/deliveries`,
           description: 'Gestione conferimenti giornalieri',
@@ -169,36 +195,68 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
           ]
         }
       },
+      
+      // ================================
+      // WORKFLOW DOCUMENTATION
+      // ================================
+      
       workflow: {
         pickupOrderStates: [
-          'DA_EVADERE',
-          'PROGRAMMATO',
-          'IN_EVASIONE', 
-          'IN_CARICO',
-          'CARICATO',
-          'SPEDITO',
-          'COMPLETO'
+          'DA_EVADERE - Ordine inserito, in attesa di programmazione',
+          'PROGRAMMATO - Trasportatore assegnato, data ritiro confermata',
+          'IN_EVASIONE - In corso di evasione',
+          'IN_CARICO - Materiale in fase di carico',
+          'CARICATO - Materiale caricato, documentazione completata',
+          'SPEDITO - In viaggio verso destinazione',
+          'COMPLETO - Peso a destino confermato, pronto per fatturazione'
         ],
         logisticEntityTypes: [
-          'SENDER - Mittenti/Fornitori',
-          'RECIPIENT - Destinatari/Clienti',
+          'SENDER - Mittenti/Fornitori logistici',
+          'RECIPIENT - Destinatari/Clienti logistici',
           'TRANSPORTER - Trasportatori/Vettori'
         ],
-        // NUOVO: Tipologie materiali
         materialTypes: [
           'MONO - Monomateriale plastica',
-          'MULTI - Multimateriale',
+          'MULTI - Multimateriale leggero',
           'OLIO - Oli esausti',
           'PLASTICA - Materiali plastici vari',
           'METALLI - Materiali metallici',
-          'VETRO_SARCO - Vetro e assimilati'
+          'VETRO_SARCO - Vetro e assimilati',
+          'CARTA - Carta e cartone',
+          'ORGANICO - Frazione organica'
+        ],
+        deliveryQualities: [
+          'OTTIMA - Materiale di alta qualità',
+          'BUONA - Materiale di buona qualità',
+          'SCARSA - Materiale di qualità inferiore',
+          'CONTAMINATO - Materiale contaminato'
         ]
       },
+      
+      // ================================
+      // ROLES AND PERMISSIONS
+      // ================================
+      
       roles: {
         USER: 'Utente base - Solo lettura',
         OPERATOR: 'Operatore - Gestione carico e documentazione',
         MANAGER: 'Manager - Gestione completa workflow',
         ADMIN: 'Amministratore - Accesso completo sistema'
+      },
+      
+      // ================================
+      // TECHNICAL INFO
+      // ================================
+      
+      technical: {
+        apiVersion: '1.0.0',
+        nodeVersion: process.version,
+        environment: process.env.NODE_ENV || 'development',
+        database: 'PostgreSQL with Prisma ORM',
+        authentication: 'JWT Bearer tokens',
+        fileUploads: 'Multipart form data',
+        rateLimit: '100 requests per minute per IP',
+        cors: 'Enabled for frontend domains'
       }
     });
   });
@@ -213,6 +271,7 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
       message: 'Endpoint non trovato',
       path: req.originalUrl,
       method: req.method,
+      timestamp: new Date().toISOString(),
       availableEndpoints: [
         `${apiPrefix}/health`,
         `${apiPrefix}/info`,
@@ -224,11 +283,14 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
         `${apiPrefix}/shipments`,
         `${apiPrefix}/logistics`,
         `${apiPrefix}/dashboard`,
-        `${apiPrefix}/deliveries`, // AGGIUNTO
-        `${apiPrefix}/contributors`, // AGGIUNTO
-        `${apiPrefix}/material-types`, // AGGIUNTO
-        `${apiPrefix}/calendar` // AGGIUNTO
-      ]
+        `${apiPrefix}/deliveries`,
+        `${apiPrefix}/contributors`,
+        `${apiPrefix}/material-types`,
+        `${apiPrefix}/calendar`
+      ],
+      suggestion: `Controllare la documentazione API all'endpoint ${apiPrefix}/info`
     });
   });
+  
+  console.log('✅ All routes configured successfully!');
 };

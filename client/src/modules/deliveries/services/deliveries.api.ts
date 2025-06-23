@@ -5,67 +5,73 @@ import type {
   Delivery, 
   CreateDeliveryData, 
   UpdateDeliveryData, 
-  DeliveryFilters, 
+  DeliveryFilters,
   MonthlyCalendarData 
 } from '../types/deliveries.types';
 
 export const deliveriesApi = {
-  getAll: async (filters?: DeliveryFilters): Promise<Delivery[]> => {
+  // Ottieni tutti i conferimenti con filtri
+  getAll: (filters?: DeliveryFilters): Promise<Delivery[]> => {
     const params = new URLSearchParams();
-    if (filters?.startDate) params.append('startDate', filters.startDate);
-    if (filters?.endDate) params.append('endDate', filters.endDate);
+    if (filters?.startDate) params.append('startDate', filters.startDate.toISOString());
+    if (filters?.endDate) params.append('endDate', filters.endDate.toISOString());
     if (filters?.contributorId) params.append('contributorId', filters.contributorId);
     if (filters?.materialTypeId) params.append('materialTypeId', filters.materialTypeId);
     if (filters?.basinId) params.append('basinId', filters.basinId);
     if (filters?.isValidated !== undefined) params.append('isValidated', filters.isValidated.toString());
 
-    const response = await api.get(`/deliveries?${params.toString()}`);
-    return response.data;
+    return api.get(`/deliveries?${params.toString()}`).then(res => res.data);
   },
 
-  getById: async (id: string): Promise<Delivery> => {
-    const response = await api.get(`/deliveries/${id}`);
-    return response.data;
+  // Ottieni conferimento per ID
+  getById: (id: string): Promise<Delivery> => {
+    return api.get(`/deliveries/${id}`).then(res => res.data);
   },
 
-  create: async (data: CreateDeliveryData): Promise<Delivery> => {
-    const response = await api.post('/deliveries', data);
-    return response.data;
+  // Crea nuovo conferimento
+  create: (data: CreateDeliveryData): Promise<Delivery> => {
+    return api.post('/deliveries', data).then(res => res.data);
   },
 
-  update: async (id: string, data: UpdateDeliveryData): Promise<Delivery> => {
-    const response = await api.put(`/deliveries/${id}`, data);
-    return response.data;
+  // AGGIUNTO: Crea multipli conferimenti (per inserimento rapido)
+  createBatch: (deliveries: CreateDeliveryData[]): Promise<Delivery[]> => {
+    return api.post('/deliveries/batch', { deliveries }).then(res => res.data);
   },
 
-  delete: async (id: string): Promise<void> => {
-    await api.delete(`/deliveries/${id}`);
+  // Aggiorna conferimento
+  update: (id: string, data: UpdateDeliveryData): Promise<Delivery> => {
+    return api.put(`/deliveries/${id}`, data).then(res => res.data);
   },
 
-  validate: async (id: string): Promise<Delivery> => {
-    const response = await api.patch(`/deliveries/${id}/validate`);
-    return response.data;
+  // Elimina conferimento
+  delete: (id: string): Promise<void> => {
+    return api.delete(`/deliveries/${id}`).then(res => res.data);
   },
 
-  getMonthlyCalendar: async (
-    year: number, 
-    month: number, 
-    materialTypeId?: string,
-    basinId?: string
-  ): Promise<MonthlyCalendarData> => {
+  // Valida conferimento
+  validate: (id: string): Promise<Delivery> => {
+    return api.patch(`/deliveries/${id}/validate`).then(res => res.data);
+  },
+
+  // AGGIUNTO: Ottieni conferimenti per data specifica
+  getByDate: (date: string, materialTypeId?: string): Promise<Delivery[]> => {
+    const params = new URLSearchParams();
+    params.append('date', date);
+    if (materialTypeId) params.append('materialTypeId', materialTypeId);
+    
+    return api.get(`/deliveries/by-date?${params.toString()}`).then(res => res.data);
+  },
+
+  // Ottieni dati calendario mensile
+  getMonthlyCalendar: (year: number, month: number, materialTypeId?: string): Promise<MonthlyCalendarData> => {
     const params = new URLSearchParams();
     if (materialTypeId) params.append('materialTypeId', materialTypeId);
-    if (basinId) params.append('basinId', basinId);
-
-    const response = await api.get(`/calendar/${year}/${month}?${params.toString()}`);
-    return response.data;
+    
+    return api.get(`/calendar/${year}/${month}?${params.toString()}`).then(res => res.data);
   },
 
-  getDayDeliveries: async (date: string, materialTypeId?: string): Promise<Delivery[]> => {
-    const params = new URLSearchParams();
-    if (materialTypeId) params.append('materialTypeId', materialTypeId);
-
-    const response = await api.get(`/calendar/day/${date}?${params.toString()}`);
-    return response.data;
+  // CORREZIONE: getDayDeliveries ora usa getByDate
+  getDayDeliveries: (date: string, materialTypeId?: string): Promise<Delivery[]> => {
+    return deliveriesApi.getByDate(date, materialTypeId);
   }
 };
