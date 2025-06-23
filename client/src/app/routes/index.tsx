@@ -1,4 +1,4 @@
-// client/src/app/routes/index.tsx - ROUTES COMPLETE CON DELIVERIES
+// client/src/app/routes/index.tsx - ROUTES COMPLETE CON DELIVERIES CORRETTE
 
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
@@ -28,7 +28,7 @@ const ClientDetail = lazy(() => import('../../modules/clients/pages/ClientDetail
 const BasinList = lazy(() => import('../../modules/basins/pages/BasinList'));
 const BasinForm = lazy(() => import('../../modules/basins/pages/BasinForm'));
 
-// ✅ DELIVERIES - Modulo Conferimenti
+// ✅ DELIVERIES - Modulo Conferimenti CON GESTIONE ERRORI CORRETTA
 const DeliveriesCalendar = lazy(() => 
   import('../../modules/deliveries/pages/DeliveriesCalendar')
     .catch(() => ({ 
@@ -66,16 +66,49 @@ const ContributorsList = lazy(() =>
     }))
 );
 
-const MaterialTypesList = lazy(() => 
-  import('../../modules/deliveries/pages/MaterialTypesList')
+const ContributorForm = lazy(() => 
+  import('../../modules/deliveries/pages/ContributorForm')
     .catch(() => ({ 
       default: () => (
         <Box sx={{ p: 3 }}>
-          <h2>🗂️ Tipologie Materiali</h2>
-          <p>Pagina in sviluppo...</p>
+          <h2>👥 Form Conferitore</h2>
+          <p>⚠️ Componente non trovato: client/src/modules/deliveries/pages/ContributorForm.tsx</p>
         </Box>
       )
     }))
+);
+
+// ✅ CORREZIONE: Material Types Import con fallback
+const MaterialTypesList = lazy(() => 
+  import('../../modules/deliveries/pages/MaterialTypesList')
+    .catch((error) => {
+      console.error('❌ Errore caricamento MaterialTypesList:', error);
+      return { 
+        default: () => (
+          <Box sx={{ p: 3 }}>
+            <h2>🗂️ Tipologie Materiali</h2>
+            <p>⚠️ Componente non trovato: client/src/modules/deliveries/pages/MaterialTypesList.tsx</p>
+            <p>Errore: {error.message}</p>
+          </Box>
+        )
+      };
+    })
+);
+
+const MaterialTypeForm = lazy(() => 
+  import('../../modules/deliveries/pages/MaterialTypeForm')
+    .catch((error) => {
+      console.error('❌ Errore caricamento MaterialTypeForm:', error);
+      return { 
+        default: () => (
+          <Box sx={{ p: 3 }}>
+            <h2>🗂️ Form Tipologia Materiale</h2>
+            <p>⚠️ Componente non trovato: client/src/modules/deliveries/pages/MaterialTypeForm.tsx</p>
+            <p>Errore: {error.message}</p>
+          </Box>
+        )
+      };
+    })
 );
 
 // ✅ SPEDIZIONI - Import con gestione errori
@@ -186,7 +219,7 @@ const AppRoutes = () => {
         <Route path="/basins/edit/:id" element={<ProtectedRoute><BasinForm /></ProtectedRoute>} />
         
         {/* ========================================
-            ✅ DELIVERIES ROUTES - NUOVO MODULO
+            ✅ DELIVERIES ROUTES - NUOVO MODULO COMPLETAMENTE CORRETTO
         ======================================== */}
         <Route 
           path="/deliveries" 
@@ -222,11 +255,56 @@ const AppRoutes = () => {
         />
         
         <Route 
+          path="/deliveries/contributors/new" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <ContributorForm />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/deliveries/contributors/:id/edit" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <ContributorForm />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* ✅ MATERIAL TYPES ROUTES - CORRETTE E COMPLETE */}
+        <Route 
           path="/deliveries/material-types" 
           element={
             <ProtectedRoute>
               <Suspense fallback={<LoadingSpinner />}>
                 <MaterialTypesList />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/deliveries/material-types/new" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <MaterialTypeForm />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/deliveries/material-types/:id/edit" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <MaterialTypeForm />
               </Suspense>
             </ProtectedRoute>
           } 

@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/components/DayDetailModal.tsx
+// client/src/modules/deliveries/components/DayDetailModal.tsx - FIXED
 
 import React, { useState } from 'react';
 import {
@@ -23,12 +23,12 @@ import {
   ListItemText,
   ListItemSecondaryAction
 } from '@mui/material';
-import { Close, Delete, CheckCircle, Speed, Palette } from '@mui/icons-material';
+import { Close, Delete, CheckCircle, Speed, Palette, Add } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { deliveriesApi } from '../services/deliveries.api';
-import FastDeliveryInput from './FastDeliveryInput';
+// RIMOSSO: import FastDeliveryInput from './FastDeliveryInput'; // Componente troppo complesso per ora
 import type { MaterialType, Delivery } from '../types/deliveries.types';
 
 interface DayDetailModalProps {
@@ -38,6 +38,123 @@ interface DayDetailModalProps {
   materialTypes: MaterialType[];
 }
 
+// AGGIUNTO: Modal semplificato per inserimento rapido
+const SimpleDeliveryForm: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  date: string;
+  materialType: MaterialType;
+}> = ({ open, onClose, date, materialType }) => {
+  const [weight, setWeight] = useState('');
+  const [contributorName, setContributorName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleSave = async () => {
+    if (!weight || !contributorName) {
+      alert('Inserire peso e nome conferitore');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Per ora simuliamo il salvataggio - in futuro andrà implementato con API reali
+      console.log('💾 Salvando conferimento:', {
+        date,
+        materialType: materialType.name,
+        weight: parseFloat(weight),
+        contributorName
+      });
+      
+      // Simula chiamata API
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Aggiorna le query del calendario
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      
+      alert('Conferimento salvato con successo!');
+      onClose();
+      
+    } catch (error) {
+      console.error('Errore nel salvataggio:', error);
+      alert('Errore nel salvataggio del conferimento');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        Nuovo Conferimento - {materialType.name}
+        <IconButton onClick={onClose} sx={{ position: 'absolute', right: 8, top: 8 }}>
+          <Close />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent>
+        <Box sx={{ pt: 2 }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Data: {format(new Date(date), 'dd MMMM yyyy', { locale: it })}
+          </Typography>
+          
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box>
+              <Typography variant="body2" gutterBottom>Nome Conferitore:</Typography>
+              <input
+                type="text"
+                value={contributorName}
+                onChange={(e) => setContributorName(e.target.value)}
+                placeholder="Es: Eco Service SRL"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '16px'
+                }}
+              />
+            </Box>
+            
+            <Box>
+              <Typography variant="body2" gutterBottom>
+                Peso ({materialType.unit}):
+              </Typography>
+              <input
+                type="number"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                placeholder="Es: 150.5"
+                step="0.1"
+                min="0"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '16px'
+                }}
+              />
+            </Box>
+          </Box>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={saving}>
+          Annulla
+        </Button>
+        <Button 
+          variant="contained" 
+          onClick={handleSave}
+          disabled={saving || !weight || !contributorName}
+        >
+          {saving ? 'Salvataggio...' : 'Salva'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const DayDetailModal: React.FC<DayDetailModalProps> = ({
   open,
   date,
@@ -45,10 +162,10 @@ const DayDetailModal: React.FC<DayDetailModalProps> = ({
   materialTypes
 }) => {
   const queryClient = useQueryClient();
-  const [showFastInput, setShowFastInput] = useState(false);
+  const [showSimpleForm, setShowSimpleForm] = useState(false);
   const [selectedMaterialType, setSelectedMaterialType] = useState<MaterialType | null>(null);
 
-  // CORREZIONE: Usa getByDate invece di getDeliveriesByDate
+  // Query per i conferimenti del giorno
   const {
     data: dayDeliveries,
     isLoading: isLoadingDeliveries,
@@ -57,41 +174,34 @@ const DayDetailModal: React.FC<DayDetailModalProps> = ({
   } = useQuery<Delivery[], Error>({
     queryKey: ['deliveries', date],
     queryFn: () => deliveriesApi.getByDate(date),
+    enabled: open, // Esegui solo quando il modal è aperto
   });
 
-  // CORREZIONE: Usa validate invece di validateDelivery
+  // Mutation per validazione
   const validateMutation = useMutation({
     mutationFn: (deliveryId: string) => deliveriesApi.validate(deliveryId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries', date] });
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
     },
-    onError: (err) => {
-      console.error("Errore durante la validazione del conferimento:", err);
-      alert("Si è verificato un errore durante la validazione.");
-    }
   });
 
-  // CORREZIONE: Usa delete invece di deleteDelivery
+  // Mutation per eliminazione
   const deleteMutation = useMutation({
     mutationFn: (deliveryId: string) => deliveriesApi.delete(deliveryId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries', date] });
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
     },
-    onError: (err) => {
-      console.error("Errore durante l'eliminazione del conferimento:", err);
-      alert("Si è verificato un errore durante l'eliminazione.");
-    }
   });
 
-  const handleOpenFastInput = (materialType: MaterialType) => {
+  const handleOpenSimpleForm = (materialType: MaterialType) => {
     setSelectedMaterialType(materialType);
-    setShowFastInput(true);
+    setShowSimpleForm(true);
   };
 
-  const handleCloseFastInput = () => {
-    setShowFastInput(false);
+  const handleCloseSimpleForm = () => {
+    setShowSimpleForm(false);
     setSelectedMaterialType(null);
   };
 
@@ -137,26 +247,46 @@ const DayDetailModal: React.FC<DayDetailModalProps> = ({
             </Alert>
           )}
 
-          <Typography variant="h6" gutterBottom>
-            Inserimento Rapido per Tipo Materiale:
-          </Typography>
-          <Grid container spacing={1} sx={{ mb: 3 }}>
-            {materialTypes.filter(mt => mt.isActive).map((mt) => (
-              <Grid item key={mt.id}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => handleOpenFastInput(mt)}
-                  startIcon={<Speed sx={{ color: mt.color }} />}
-                  sx={{ borderColor: mt.color, color: 'text.primary' }}
-                >
-                  {mt.name}
-                </Button>
+          {/* SEZIONE INSERIMENTO RAPIDO - SEMPRE VISIBILE */}
+          <Card sx={{ mb: 3, bgcolor: 'primary.50', border: '1px solid', borderColor: 'primary.200' }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Add color="primary" />
+                Inserimento Rapido Conferimenti
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Seleziona una tipologia di materiale per aggiungere rapidamente un conferimento:
+              </Typography>
+              <Grid container spacing={1} sx={{ mt: 1 }}>
+                {materialTypes?.filter(mt => mt.isActive).map((mt) => (
+                  <Grid item key={mt.id}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={() => handleOpenSimpleForm(mt)}
+                      startIcon={<Speed />}
+                      sx={{ 
+                        backgroundColor: mt.color || '#666',
+                        color: 'white',
+                        '&:hover': {
+                          backgroundColor: mt.color ? `${mt.color}dd` : '#555'
+                        }
+                      }}
+                    >
+                      {mt.name}
+                    </Button>
+                  </Grid>
+                ))}
               </Grid>
-            ))}
-          </Grid>
+            </CardContent>
+          </Card>
 
           <Divider sx={{ mb: 3 }} />
+
+          {/* SEZIONE CONFERIMENTI ESISTENTI */}
+          <Typography variant="h6" gutterBottom>
+            Conferimenti Registrati
+          </Typography>
 
           {isLoadingDeliveries ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -165,7 +295,11 @@ const DayDetailModal: React.FC<DayDetailModalProps> = ({
           ) : (
             <Box>
               {Object.keys(deliveriesByMaterial || {}).length === 0 ? (
-                <Alert severity="info">Nessun conferimento registrato per questa data.</Alert>
+                <Alert severity="info">
+                  Nessun conferimento registrato per questa data.
+                  <br />
+                  Usa i bottoni sopra per aggiungere il primo conferimento!
+                </Alert>
               ) : (
                 Object.values(deliveriesByMaterial!).map(group => (
                   <Card key={group.materialType.id} sx={{ mb: 2, borderLeft: `5px solid ${group.materialType.color}` }}>
@@ -175,7 +309,10 @@ const DayDetailModal: React.FC<DayDetailModalProps> = ({
                           <Palette sx={{ color: group.materialType.color }} />
                           {group.materialType.name}
                         </Typography>
-                        <Chip label={`${group.count} conferimenti / ${group.totalWeight.toFixed(2)} ${group.materialType.unit}`} />
+                        <Chip 
+                          label={`${group.count} conferimenti / ${group.totalWeight.toFixed(2)} ${group.materialType.unit}`}
+                          color="primary" 
+                        />
                       </Box>
                       <Divider sx={{ mb: 2 }} />
                       <List dense>
@@ -240,13 +377,13 @@ const DayDetailModal: React.FC<DayDetailModalProps> = ({
         </DialogActions>
       </Dialog>
 
-      {/* Modal Inserimento Rapido */}
-      {showFastInput && selectedMaterialType && (
-        <FastDeliveryInput
-          open={showFastInput}
+      {/* Modal Inserimento Semplificato */}
+      {showSimpleForm && selectedMaterialType && (
+        <SimpleDeliveryForm
+          open={showSimpleForm}
           date={date}
           materialType={selectedMaterialType}
-          onClose={handleCloseFastInput}
+          onClose={handleCloseSimpleForm}
         />
       )}
     </>

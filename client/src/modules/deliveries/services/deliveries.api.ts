@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/services/deliveries.api.ts
+// client/src/modules/deliveries/services/deliveries.api.ts - FIXED
 
 import api from '../../../core/services/api';
 import type { 
@@ -33,7 +33,7 @@ export const deliveriesApi = {
     return api.post('/deliveries', data).then(res => res.data);
   },
 
-  // AGGIUNTO: Crea multipli conferimenti (per inserimento rapido)
+  // CORRETTO: Crea multipli conferimenti (per inserimento rapido)
   createBatch: (deliveries: CreateDeliveryData[]): Promise<Delivery[]> => {
     return api.post('/deliveries/batch', { deliveries }).then(res => res.data);
   },
@@ -53,12 +53,13 @@ export const deliveriesApi = {
     return api.patch(`/deliveries/${id}/validate`).then(res => res.data);
   },
 
-  // AGGIUNTO: Ottieni conferimenti per data specifica
+  // CORRETTO: Ottieni conferimenti per data specifica
   getByDate: (date: string, materialTypeId?: string): Promise<Delivery[]> => {
     const params = new URLSearchParams();
     params.append('date', date);
     if (materialTypeId) params.append('materialTypeId', materialTypeId);
     
+    // CORREZIONE: Usa l'endpoint corretto
     return api.get(`/deliveries/by-date?${params.toString()}`).then(res => res.data);
   },
 
@@ -70,7 +71,7 @@ export const deliveriesApi = {
     return api.get(`/calendar/${year}/${month}?${params.toString()}`).then(res => res.data);
   },
 
-  // CORREZIONE: getDayDeliveries ora usa getByDate
+  // DEPRECATO: getDayDeliveries ora usa getByDate
   getDayDeliveries: (date: string, materialTypeId?: string): Promise<Delivery[]> => {
     return deliveriesApi.getByDate(date, materialTypeId);
   }

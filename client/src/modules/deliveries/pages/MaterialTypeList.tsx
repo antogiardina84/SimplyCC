@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/pages/MaterialTypesList.tsx
+// client/src/modules/deliveries/pages/MaterialTypesList.tsx - VERSIONE COMPLETAMENTE CORRETTA
 
 import React, { useState } from 'react';
 import {
@@ -22,214 +22,244 @@ import {
   Tooltip,
   Card,
   CardContent,
-  Collapse,
-  Alert
+  Alert,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   Add,
   Edit,
   Delete,
   Visibility,
-  ExpandMore,
-  ExpandLess
+  Refresh,
+  BugReport,
+  CheckCircle,
+  ErrorOutline
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { materialTypesApi } from '../services/materialTypes.api';
-import type { MaterialType, MaterialTypeHierarchy } from '../types/deliveries.types';
+import type { MaterialType } from '../types/deliveries.types'; // Importa MaterialType, è utilizzata per la tipizzazione di allTypes
 
 const MaterialTypesList: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Stati locali
   const [searchTerm, setSearchTerm] = useState('');
   const [showInactive, setShowInactive] = useState(false);
-  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+  const [showDebugDialog, setShowDebugDialog] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
 
-  // Query per le tipologie materiali gerarchiche
-  const { data: hierarchicalTypes, isLoading, error } = useQuery({
-    queryKey: ['materialTypesHierarchy'],
-    queryFn: () => materialTypesApi.getHierarchy(),
-    refetchOnWindowFocus: false,
-  });
+  // Funzione helper per ottenere il messaggio di errore
+  const getErrorMessage = (error: unknown): string => {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+      return String(error.message);
+    }
+    return 'Errore sconosciuto';
+  };
 
-  // Query per tutte le tipologie (incluse inattive se richiesto)
-  const { data: allTypes } = useQuery({
+  // Query per tutte le tipologie con gestione errori migliorata
+  const {
+    data: allTypes,
+    isLoading,
+    error,
+    refetch,
+    isError
+  } = useQuery({
     queryKey: ['materialTypes', showInactive],
-    queryFn: () => materialTypesApi.getAll({ includeInactive: showInactive }),
+    queryFn: async () => {
+      console.log('🔍 Fetching material types...');
+      try {
+        const result = await materialTypesApi.getAll({ includeInactive: showInactive });
+        console.log('✅ Material types fetched successfully:', result.length);
+        return result;
+      } catch (error: unknown) { // Specifica error come unknown
+        console.error('❌ Error in material types query:', error);
+        throw error;
+      }
+    },
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
     refetchOnWindowFocus: false,
   });
 
   // Mutation per eliminazione
   const deleteMutation = useMutation({
-    mutationFn: materialTypesApi.delete,
+    mutationFn: (id: string) => materialTypesApi.delete(id),
     onSuccess: () => {
+      console.log('✅ Material type deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['materialTypes'] });
-      queryClient.invalidateQueries({ queryKey: ['materialTypesHierarchy'] });
+    },
+    onError: (error: unknown) => { // Specifica error come unknown
+      console.error('❌ Delete mutation failed:', error);
+      alert(`Errore durante l'eliminazione: ${getErrorMessage(error)}`); // Usa la funzione helper
     },
   });
 
-  const handleDeleteMaterialType = async (id: string, name: string) => {
-    if (window.confirm(`Sei sicuro di voler eliminare la tipologia "${name}"?`)) {
+  // Test di connettività
+  const testMutation = useMutation({
+    mutationFn: () => materialTypesApi.testConnection(),
+    onSuccess: (result) => {
+      const message = result
+        ? '✅ Connessione API riuscita!'
+        : '❌ Test connessione fallito';
+      setDebugInfo(message);
+      alert(message);
+    },
+    onError: (error: unknown) => { // Specifica error come unknown
+      const message = `❌ Test connessione fallito: ${getErrorMessage(error)}`; // Usa la funzione helper
+      setDebugInfo(message);
+      alert(message);
+    },
+  });
+
+  // ✅ HANDLER NAVIGAZIONE CORRETTO
+  const handleCreateNew = () => {
+    const timestamp = new Date().toLocaleTimeString();
+
+    console.log('='.repeat(50));
+    console.log('🔄 handleCreateNew chiamato alle:', timestamp);
+    console.log('📍 URL corrente:', window.location.href);
+    console.log('🎯 Target URL: /deliveries/material-types/new');
+
+    const debugMessage = `[${timestamp}] Tentativo navigazione verso nuovo form...`;
+    setDebugInfo(debugMessage);
+
+    try {
+      // Test preliminare del router
+      if (typeof navigate !== 'function') {
+        throw new Error('Navigate function non disponibile');
+      }
+
+      // Effettua la navigazione
+      navigate('/deliveries/material-types/new');
+
+      console.log('✅ navigate() chiamato con successo');
+      setDebugInfo(prev => prev + ` -> navigate() eseguito con successo`);
+
+      // Verifica dopo un breve delay
+      setTimeout(() => {
+        console.log('📍 URL dopo navigate:', window.location.href);
+        console.log('='.repeat(50));
+      }, 100);
+
+    } catch (error: unknown) { // Specifica error come unknown
+      console.error('❌ Errore durante navigate():', error);
+      const errorMessage = getErrorMessage(error); // Usa la funzione helper
+      setDebugInfo(prev => prev + ` -> ERRORE: ${errorMessage}`);
+      alert(errorMessage);
+    }
+  };
+
+  // ✅ HANDLER per modifica
+  const handleEdit = (id: string) => {
+    console.log('🔄 Editing material type:', id);
+    try {
+      navigate(`/deliveries/material-types/${id}/edit`);
+      console.log('✅ Edit navigation successful');
+    } catch (error: unknown) { // Specifica error come unknown
+      console.error('❌ Edit navigation failed:', error);
+      alert('Errore durante la navigazione alla modifica: ' + getErrorMessage(error)); // Usa la funzione helper
+    }
+  };
+
+  // ✅ HANDLER per visualizzazione
+  const handleView = (id: string) => {
+    console.log('👁️ Viewing material type:', id);
+    // Per ora solo log, in futuro implementare vista dettagli
+    alert(`Vista dettagli per tipologia ${id} - Da implementare`);
+  };
+
+  // ✅ HANDLER per eliminazione
+  const handleDelete = async (id: string, name: string) => {
+    if (window.confirm(`Sei sicuro di voler eliminare la tipologia "${name}"?\n\nQuesta azione non può essere annullata.`)) {
       try {
+        console.log('🗑️ Deleting material type:', id, name);
         await deleteMutation.mutateAsync(id);
-      } catch (error) {
-        console.error('Errore durante l\'eliminazione:', error);
+        console.log('✅ Material type deleted successfully');
+      } catch (error: unknown) { // Specifica error come unknown
+        console.error('❌ Delete failed:', error);
+        // L'errore è già gestito nella mutation onError
       }
     }
   };
 
-  const toggleExpanded = (typeId: string) => {
-    const newExpanded = new Set(expandedTypes);
-    if (newExpanded.has(typeId)) {
-      newExpanded.delete(typeId);
-    } else {
-      newExpanded.add(typeId);
-    }
-    setExpandedTypes(newExpanded);
+  // ✅ HANDLER per test connessione
+  const handleTestConnection = async () => {
+    console.log('🔍 Testing API connection...');
+    setDebugInfo('Testing connessione API...');
+    await testMutation.mutateAsync();
   };
 
+  // ✅ HANDLER per refresh
+  const handleRefresh = () => {
+    console.log('🔄 Refreshing material types...');
+    setDebugInfo('Aggiornamento lista...');
+    refetch();
+  };
+
+  // Filtro materiali
   const filteredTypes = allTypes?.filter(type =>
     type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     type.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
     type.description?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
-  const renderTypeRow = (type: MaterialType, level = 0) => (
-    <TableRow key={type.id} hover>
-      <TableCell>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pl: level * 3 }}>
-          {type.children && type.children.length > 0 && (
-            <IconButton
-              size="small"
-              onClick={() => toggleExpanded(type.id)}
-            >
-              {expandedTypes.has(type.id) ? <ExpandLess /> : <ExpandMore />}
-            </IconButton>
-          )}
-          
-          <Box
-            sx={{
-              width: 16,
-              height: 16,
-              borderRadius: '50%',
-              backgroundColor: type.color || '#666',
-              flexShrink: 0
-            }}
-          />
-          
-          <Box>
-            <Typography variant="body2" fontWeight={level === 0 ? 600 : 400}>
-              {type.name}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {type.code}
-            </Typography>
-          </Box>
-        </Box>
-      </TableCell>
-      
-      <TableCell>
-        {type.description && (
-          <Typography variant="body2" color="text.secondary">
-            {type.description.length > 50 
-              ? `${type.description.substring(0, 50)}...` 
-              : type.description}
-          </Typography>
-        )}
-      </TableCell>
-      
-      <TableCell align="center">
-        <Chip label={type.unit} size="small" variant="outlined" />
-      </TableCell>
-      
-      <TableCell>
-        {type.reference && (
-          <Chip 
-            label={type.reference} 
-            size="small" 
-            color="primary" 
-            variant="outlined" 
-          />
-        )}
-      </TableCell>
-      
-      <TableCell align="center">
-        <Chip
-          label={type.isActive ? 'Attiva' : 'Inattiva'}
-          size="small"
-          color={type.isActive ? 'success' : 'default'}
-          variant={type.isActive ? 'filled' : 'outlined'}
-        />
-      </TableCell>
-      
-      <TableCell align="center">
-        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-          <Tooltip title="Visualizza">
-            <IconButton size="small" color="info">
-              <Visibility fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          
-          <Tooltip title="Modifica">
-            <IconButton
-              size="small"
-              color="primary"
-              onClick={() => navigate(`/deliveries/material-types/${type.id}/edit`)}
-            >
-              <Edit fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          
-          <Tooltip title="Elimina">
-            <IconButton
-              size="small"
-              color="error"
-              onClick={() => handleDeleteMaterialType(type.id, type.name)}
-              disabled={deleteMutation.isPending}
-            >
-              <Delete fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </TableCell>
-    </TableRow>
-  );
-
-  const renderHierarchicalView = () => {
-    if (!hierarchicalTypes) return null;
-
-    return hierarchicalTypes.map((parentType: MaterialTypeHierarchy) => (
-      <React.Fragment key={parentType.id}>
-        {renderTypeRow(parentType, 0)}
-        <TableRow>
-          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
-            <Collapse in={expandedTypes.has(parentType.id)} timeout="auto" unmountOnExit>
-              <Box sx={{ margin: 1 }}>
-                <Table size="small">
-                  <TableBody>
-                    {parentType.children?.map((childType: MaterialTypeHierarchy) =>
-                      renderTypeRow(childType, 1)
-                    )}
-                  </TableBody>
-                </Table>
-              </Box>
-            </Collapse>
-          </TableCell>
-        </TableRow>
-      </React.Fragment>
-    ));
-  };
-
-  const renderFlatView = () => {
-    return filteredTypes.map(type => renderTypeRow(type, 0));
-  };
-
-  if (error) {
+  // ✅ GESTIONE ERRORI MIGLIORATA
+  if (isError && error) {
     return (
       <Container maxWidth="xl">
-        <Alert severity="error" sx={{ mt: 2 }}>
-          Errore nel caricamento delle tipologie materiali: {error instanceof Error ? error.message : 'Errore sconosciuto'}
+        <Alert
+          severity="error"
+          sx={{ mt: 2 }}
+          action={
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button color="inherit" size="small" onClick={() => refetch()}>
+                Riprova
+              </Button>
+              <Button color="inherit" size="small" onClick={handleTestConnection}>
+                Test API
+              </Button>
+            </Box>
+          }
+        >
+          <Typography variant="h6" gutterBottom>
+            ❌ Errore nel caricamento delle tipologie materiali
+          </Typography>
+          <Typography variant="body2" gutterBottom>
+            <strong>Errore:</strong> {getErrorMessage(error)}
+          </Typography>
+          <Typography variant="body2">
+            <strong>Possibili cause:</strong>
+          </Typography>
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            <li>Backend non avviato (controllare http://localhost:4000)</li>
+            <li>Endpoint /api/material-types non disponibile</li>
+            <li>Errore di connessione al database PostgreSQL</li>
+            <li>Problema di autenticazione (token scaduto)</li>
+            <li>CORS non configurato correttamente</li>
+          </ul>
         </Alert>
+
+        {/* Debug Panel per errori */}
+        <Paper sx={{ p: 2, mt: 2, bgcolor: 'grey.100' }}>
+          <Typography variant="subtitle2" gutterBottom>
+            🔧 Debug Information
+          </Typography>
+          <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace' }}>
+            URL Frontend: {window.location.href}<br/>
+            Backend URL: {process.env.REACT_APP_API_URL || 'http://localhost:4000'}<br/>
+            Error Type: {error instanceof Error ? error.constructor.name : 'Unknown'}<br/> {/* Migliorato per tipi sconosciuti */}
+            Error Details: {JSON.stringify(error, null, 2)}
+          </Typography>
+        </Paper>
       </Container>
     );
   }
@@ -242,23 +272,26 @@ const MaterialTypesList: React.FC = () => {
           🗂️ Tipologie Materiali
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Gestisci le tipologie di materiali per i conferimenti
+          Gestisci le tipologie di materiali per i conferimenti del sistema
         </Typography>
       </Box>
 
       {/* Toolbar */}
       <Paper sx={{ p: 2, mb: 3 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={6}>
+          {/* Ricerca */}
+          <Grid item xs={12} md={4}>
             <TextField
               fullWidth
               size="small"
               label="Cerca tipologie..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Nome, codice o descrizione..."
             />
           </Grid>
 
+          {/* Switch inattive */}
           <Grid item xs={12} md={3}>
             <FormControlLabel
               control={
@@ -271,26 +304,73 @@ const MaterialTypesList: React.FC = () => {
             />
           </Grid>
 
-          <Grid item xs={12} md={3}>
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+          {/* Azioni */}
+          <Grid item xs={12} md={5}>
+            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <Button
                 variant="contained"
                 startIcon={<Add />}
-                onClick={() => navigate('/deliveries/material-types/new')}
+                onClick={handleCreateNew}
+                size="small"
+                color="primary"
+                sx={{ minWidth: 140 }}
               >
                 Nuova Tipologia
+              </Button>
+
+              <Button
+                variant="outlined"
+                startIcon={<Refresh />}
+                onClick={handleRefresh}
+                size="small"
+                disabled={isLoading}
+              >
+                {isLoading ? 'Caricando...' : 'Ricarica'}
+              </Button>
+
+              <Button
+                variant="outlined"
+                startIcon={<BugReport />}
+                onClick={() => setShowDebugDialog(true)}
+                size="small"
+                color="secondary"
+              >
+                Debug
               </Button>
             </Box>
           </Grid>
         </Grid>
       </Paper>
 
+      {/* Status Bar */}
+      <Paper sx={{ p: 1, mb: 3, bgcolor: 'info.50', border: '1px solid', borderColor: 'info.200' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {isLoading ? (
+              <>
+                <CircularProgress size={16} />
+                Caricamento tipologie materiali...
+              </>
+            ) : (
+              <>
+                <CheckCircle color="success" fontSize="small" />
+                {allTypes?.length || 0} tipologie caricate ({filteredTypes.length} visualizzate)
+              </>
+            )}
+          </Typography>
+
+          <Typography variant="caption" color="text.secondary">
+            {debugInfo && `Debug: ${debugInfo}`}
+          </Typography>
+        </Box>
+      </Paper>
+
       {/* Statistiche Rapide */}
-      {allTypes && (
+      {allTypes && allTypes.length > 0 && (
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} md={3}>
             <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
+              <CardContent sx={{ textAlign: 'center', py: 2 }}>
                 <Typography variant="h4" color="primary">
                   {allTypes.filter(t => t.isActive).length}
                 </Typography>
@@ -300,10 +380,10 @@ const MaterialTypesList: React.FC = () => {
               </CardContent>
             </Card>
           </Grid>
-          
+
           <Grid item xs={12} md={3}>
             <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
+              <CardContent sx={{ textAlign: 'center', py: 2 }}>
                 <Typography variant="h4" color="warning.main">
                   {allTypes.filter(t => !t.isActive).length}
                 </Typography>
@@ -313,10 +393,10 @@ const MaterialTypesList: React.FC = () => {
               </CardContent>
             </Card>
           </Grid>
-          
+
           <Grid item xs={12} md={3}>
             <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
+              <CardContent sx={{ textAlign: 'center', py: 2 }}>
                 <Typography variant="h4" color="info.main">
                   {allTypes.filter(t => !t.parentId).length}
                 </Typography>
@@ -326,10 +406,10 @@ const MaterialTypesList: React.FC = () => {
               </CardContent>
             </Card>
           </Grid>
-          
+
           <Grid item xs={12} md={3}>
             <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
+              <CardContent sx={{ textAlign: 'center', py: 2 }}>
                 <Typography variant="h4" color="success.main">
                   {allTypes.filter(t => t.parentId).length}
                 </Typography>
@@ -358,36 +438,203 @@ const MaterialTypesList: React.FC = () => {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
-                  Caricamento...
+                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                    <CircularProgress size={24} />
+                    <Typography>Caricamento tipologie materiali...</Typography>
+                  </Box>
                 </TableCell>
               </TableRow>
-            ) : searchTerm ? (
-              // Vista flat quando si sta cercando
-              filteredTypes.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    Nessuna tipologia trovata
-                  </TableCell>
-                </TableRow>
-              ) : (
-                renderFlatView()
-              )
+            ) : filteredTypes.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    {allTypes?.length === 0 ? (
+                      <>
+                        <ErrorOutline sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+                        <Typography variant="h6" color="text.secondary" gutterBottom>
+                          Nessuna tipologia materiale presente
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                          Inizia creando la prima tipologia di materiale per il sistema
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          startIcon={<Add />}
+                          onClick={handleCreateNew}
+                        >
+                          Crea Prima Tipologia
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Typography variant="h6" color="text.secondary">
+                          🔍 Nessuna tipologia trovata
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Prova a modificare i filtri di ricerca
+                        </Typography>
+                      </>
+                    )}
+                  </Box>
+                </TableCell>
+              </TableRow>
             ) : (
-              // Vista gerarchica quando non si sta cercando
-              hierarchicalTypes && hierarchicalTypes.length > 0 ? (
-                renderHierarchicalView()
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    Nessuna tipologia trovata
+              filteredTypes.map((type) => (
+                <TableRow key={type.id} hover>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          backgroundColor: type.color || '#666',
+                          flexShrink: 0,
+                          border: '1px solid rgba(0,0,0,0.1)'
+                        }}
+                      />
+                      <Box>
+                        <Typography variant="body2" fontWeight={500}>
+                          {type.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {type.code}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </TableCell>
+
+                  <TableCell>
+                    {type.description ? (
+                      <Typography variant="body2" color="text.secondary">
+                        {type.description.length > 50
+                          ? `${type.description.substring(0, 50)}...`
+                          : type.description}
+                      </Typography>
+                    ) : (
+                      <Typography variant="caption" color="text.disabled" fontStyle="italic">
+                        Nessuna descrizione
+                      </Typography>
+                    )}
+                  </TableCell>
+
+                  <TableCell align="center">
+                    <Chip
+                      label={type.unit}
+                      size="small"
+                      variant="outlined"
+                      sx={{ minWidth: 40 }}
+                    />
+                  </TableCell>
+
+                  <TableCell>
+                    {type.reference ? (
+                      <Chip
+                        label={type.reference}
+                        size="small"
+                        color="primary"
+                        variant="outlined"
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.disabled" fontStyle="italic">
+                        Nessun riferimento
+                      </Typography>
+                    )}
+                  </TableCell>
+
+                  <TableCell align="center">
+                    <Chip
+                      label={type.isActive ? 'Attiva' : 'Inattiva'}
+                      size="small"
+                      color={type.isActive ? 'success' : 'default'}
+                      variant={type.isActive ? 'filled' : 'outlined'}
+                    />
+                  </TableCell>
+
+                  <TableCell align="center">
+                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                      <Tooltip title="Visualizza dettagli">
+                        <IconButton
+                          size="small"
+                          color="info"
+                          onClick={() => handleView(type.id)}
+                        >
+                          <Visibility fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title="Modifica tipologia">
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => handleEdit(type.id)}
+                        >
+                          <Edit fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+
+                      <Tooltip title="Elimina tipologia">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleDelete(type.id, type.name)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
                   </TableCell>
                 </TableRow>
-              )
+              ))
             )}
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Debug Dialog */}
+      <Dialog
+        open={showDebugDialog}
+        onClose={() => setShowDebugDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>🔧 Informazioni Debug</DialogTitle>
+        <DialogContent>
+          <Box sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+            <Typography variant="subtitle2" gutterBottom>Sistema:</Typography>
+            <Box sx={{ mb: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
+              URL Corrente: {window.location.href}<br/>
+              Backend URL: {process.env.REACT_APP_API_URL || 'http://localhost:4000'}<br/>
+              Navigate Function: {typeof navigate}<br/>
+              Material Types Loaded: {allTypes?.length || 0}<br/>
+              Loading State: {isLoading.toString()}<br/>
+              Error State: {isError.toString()}
+            </Box>
+
+            <Typography variant="subtitle2" gutterBottom>Routes Target:</Typography>
+            <Box sx={{ mb: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
+              Lista: /deliveries/material-types<br/>
+              Nuovo: /deliveries/material-types/new<br/>
+              Modifica: /deliveries/material-types/:id/edit
+            </Box>
+
+            <Typography variant="subtitle2" gutterBottom>Debug Log:</Typography>
+            <Box sx={{ p: 1, bgcolor: 'grey.100', borderRadius: 1, maxHeight: 200, overflow: 'auto' }}>
+              {debugInfo || 'Nessuna informazione debug disponibile'}
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleTestConnection} disabled={testMutation.isPending}>
+            {testMutation.isPending ? 'Testing...' : 'Test API'}
+          </Button>
+          <Button onClick={() => setShowDebugDialog(false)}>
+            Chiudi
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
