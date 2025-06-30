@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/types/deliveries.types.ts
+// client/src/modules/deliveries/types/deliveries.types.ts - VERSIONE CORRETTA COMPLETA
 
 // ================================
 // CONTRIBUTOR TYPES
@@ -20,8 +20,12 @@ export interface Contributor {
     id: string;
     code: string;
     description?: string;
+    client?: {
+      id: string;
+      name: string;
+    };
   };
-  authorizedMaterialTypes: string; // JSON string array
+  authorizedMaterialTypes: string; // JSON string array dal backend
   isActive: boolean;
   notes?: string;
   createdAt: string;
@@ -101,12 +105,31 @@ export interface MaterialTypesFilters {
   isParent?: boolean;
 }
 
+export interface MaterialTypeStatistics {
+  year: number;
+  totalWeight: number;
+  totalDeliveries: number;
+  byContributor: Record<string, { weight: number; count: number }>;
+  monthlyTrend: Array<{
+    month: string;
+    weight: number;
+    deliveries: number;
+  }>;
+  averageDeliveryWeight: number;
+  topContributors: Array<{
+    contributorName: string;
+    weight: number;
+    deliveries: number;
+    percentage: number;
+  }>;
+}
+
 // ================================
 // DELIVERY TYPES
 // ================================
 export interface Delivery {
   id: string;
-  date: string; // CORREZIONE: cambiato da deliveryDate a date
+  date: string; // Data conferimento
   contributorId: string;
   contributor: Contributor;
   materialTypeId: string;
@@ -142,7 +165,7 @@ export interface Delivery {
 }
 
 export interface CreateDeliveryData {
-  date: string; // CORREZIONE: cambiato da deliveryDate a date
+  date: string; // Data conferimento
   contributorId: string;
   materialTypeId: string;
   basinId?: string;
@@ -178,19 +201,21 @@ export interface DeliveryFilters {
 // ================================
 // CALENDAR TYPES
 // ================================
+export interface MaterialBreakdown {
+  materialTypeId: string;
+  materialTypeName: string;
+  totalWeight: number;
+  count: number; // Alias per deliveryCount per compatibilità
+  deliveryCount?: number; // Mantieni per retrocompatibilità
+}
+
 export interface DayDeliveryData {
   date: string;
   hasDeliveries: boolean;
   totalWeight: number;
   totalDeliveries: number;
+  deliveriesCount?: number; // Alias per totalDeliveries
   materialsBreakdown: MaterialBreakdown[];
-}
-
-export interface MaterialBreakdown {
-  materialTypeId: string;
-  materialTypeName: string;
-  totalWeight: number;
-  deliveryCount: number;
 }
 
 export interface MonthlyTotals {
@@ -213,28 +238,138 @@ export interface MonthlyCalendarData {
 export interface ContributorStatistics {
   contributorId: string;
   contributorName: string;
+  year: number;
   totalDeliveries: number;
   totalWeight: number;
   averageWeight: number;
-  lastDeliveryDate: string;
+  lastDeliveryDate?: string;
   materialTypeBreakdown: MaterialBreakdown[];
   monthlyData: Array<{
     month: string;
     deliveries: number;
     weight: number;
   }>;
+  byMaterial: Record<string, { weight: number; count: number }>;
+  monthlyTrend: Array<{
+    month: string;
+    weight: number;
+    deliveries: number;
+  }>;
+  averageDeliveryWeight: number;
 }
 
-export interface MaterialTypeStatistics {
-  materialTypeId: string;
-  materialTypeName: string;
-  totalDeliveries: number;
-  totalWeight: number;
-  averageWeight: number;
-  contributorCount: number;
-  monthlyData: Array<{
-    month: string;
-    deliveries: number;
-    weight: number;
-  }>;
+// ================================
+// FORM TYPES (per React Hook Form)
+// ================================
+export interface MaterialTypeFormData {
+  code: string;
+  name: string;
+  description?: string;
+  unit: string;
+  cerCode?: string;
+  reference?: string;
+  color?: string;
+  sortOrder?: number;
+  parentId?: string;
+  isActive?: boolean;
 }
+
+export interface ContributorFormData {
+  name: string;
+  vatNumber?: string;
+  fiscalCode?: string;
+  address?: string;
+  city?: string;
+  zipCode?: string;
+  province?: string;
+  phone?: string;
+  email?: string;
+  contactPerson?: string;
+  basinId?: string;
+  authorizedMaterialTypes: string[];
+  notes?: string;
+  isActive?: boolean;
+}
+
+export interface DeliveryFormData {
+  date: string;
+  contributorId: string;
+  materialTypeId: string;
+  weight: number;
+  unit?: string;
+  documentNumber?: string;
+  vehiclePlate?: string;
+  driverName?: string;
+  quality?: string;
+  notes?: string;
+}
+
+// ================================
+// API RESPONSE TYPES
+// ================================
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  error?: string;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// ================================
+// ERROR TYPES
+// ================================
+export interface ApiError {
+  message: string;
+  status: number;
+  code?: string;
+  details?: any;
+}
+
+export interface ValidationError {
+  field: string;
+  message: string;
+  value?: any;
+}
+
+// ================================
+// UTILITY TYPES
+// ================================
+export type SortOrder = 'asc' | 'desc';
+
+export interface SortConfig {
+  field: string;
+  order: SortOrder;
+}
+
+export interface FilterConfig {
+  field: string;
+  operator: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'startsWith' | 'endsWith';
+  value: any;
+}
+
+// ================================
+// CONSTANTS TYPES
+// ================================
+export type MaterialUnit = 'kg' | 'ton' | 'mc' | 'lt' | 'pz';
+
+export type MaterialReference = 'COREPLA' | 'CORIPET' | 'COMIECO' | 'CIAL' | 'COREVE' | 'RICREA';
+
+export type DeliveryQuality = 'OTTIMA' | 'BUONA' | 'MEDIA' | 'SCARSA';
+
+export type MoistureLevel = 'BASSO' | 'MEDIO' | 'ALTO';
+
+export type ContaminationLevel = 'BASSO' | 'MEDIO' | 'ALTO';
+
+// ================================
+// EXPORT TUTTO PER CONVENIENZA
+// ================================
+// Rimuovi export di moduli non esistenti per evitare errori TypeScript
+// export * from './calendar.types';  // Da creare se necessario
+// export * from './filters.types';   // Da creare se necessario

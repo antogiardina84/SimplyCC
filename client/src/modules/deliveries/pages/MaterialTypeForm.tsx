@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/pages/MaterialTypeForm.tsx - VERSIONE COMPLETAMENTE CORRETTA
+// client/src/modules/deliveries/pages/MaterialTypeForm.tsx - VERSIONE CORRETTA COMPLETA
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -27,13 +27,62 @@ import { ArrowBack, Save, Cancel, Palette, Info } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { materialTypesApi } from '../services/materialTypes.api';
-import type { CreateMaterialTypeData, UpdateMaterialTypeData } from '../types/deliveries.types';
 
-interface FormData extends CreateMaterialTypeData {
+// ===============================
+// INTERFACES E TIPI
+// ===============================
+
+interface FormData {
+  code: string;
+  name: string;
+  description?: string;
+  unit: string;
+  cerCode?: string;
+  reference?: string;
+  color?: string;
+  sortOrder?: number;
+  parentId?: string;
   isActive?: boolean;
 }
 
-// Colori predefiniti per le tipologie materiali
+interface CreateMaterialTypeData {
+  code: string;
+  name: string;
+  description?: string;
+  unit: string;
+  cerCode?: string;
+  reference?: string;
+  color?: string;
+  sortOrder?: number;
+  parentId?: string;
+}
+
+interface UpdateMaterialTypeData extends Partial<CreateMaterialTypeData> {
+  isActive?: boolean;
+}
+
+interface MaterialType {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  unit: string;
+  cerCode?: string;
+  reference?: string;
+  color?: string;
+  sortOrder: number;
+  parentId?: string;
+  parent?: MaterialType;
+  children?: MaterialType[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ===============================
+// COSTANTI
+// ===============================
+
 const PREDEFINED_COLORS = [
   { name: 'Blu', value: '#2196F3' },
   { name: 'Verde', value: '#4CAF50' },
@@ -53,11 +102,13 @@ const PREDEFINED_COLORS = [
   { name: 'Rosso Scuro', value: '#FF5722' },
 ];
 
-// Unità di misura predefinite
 const PREDEFINED_UNITS = ['kg', 'ton', 'mc', 'lt', 'pz'];
 
-// Riferimenti predefiniti
 const PREDEFINED_REFERENCES = ['COREPLA', 'CORIPET', 'COMIECO', 'CIAL', 'COREVE', 'RICREA'];
+
+// ===============================
+// COMPONENTE PRINCIPALE
+// ===============================
 
 const MaterialTypeForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -70,7 +121,14 @@ const MaterialTypeForm: React.FC = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
   // Form configuration
-  const { control, handleSubmit, reset, watch, setValue, formState: { errors, isValid } } = useForm<FormData>({
+  const { 
+    control, 
+    handleSubmit, 
+    reset, 
+    watch, 
+    setValue, 
+    formState: { errors, isValid, isDirty } 
+  } = useForm<FormData>({
     defaultValues: {
       code: '',
       name: '',
@@ -88,6 +146,10 @@ const MaterialTypeForm: React.FC = () => {
 
   // Watch per preview del colore
   const selectedColor = watch('color');
+
+  // ===============================
+  // QUERIES
+  // ===============================
 
   // Query per il material type (solo in modalità edit)
   const { 
@@ -108,58 +170,121 @@ const MaterialTypeForm: React.FC = () => {
     isLoading: isLoadingParentMaterialTypes 
   } = useQuery({
     queryKey: ['materialTypes', 'parents'],
-    queryFn: () => materialTypesApi.getAll({ includeInactive: false }),
-    select: (data) => data.filter(mt => !mt.parentId), // Solo quelli senza parent
+    queryFn: async () => {
+      const response = await materialTypesApi.getAll({ includeInactive: false });
+      return response.filter(mt => !mt.parentId); // Solo quelli senza parent
+    },
   });
+
+  // ===============================
+  // MUTATIONS
+  // ===============================
 
   // Mutation per creazione
   const createMutation = useMutation({
-    mutationFn: (data: CreateMaterialTypeData) => {
+    mutationFn: async (data: CreateMaterialTypeData) => {
       console.log('🚀 Creating material type with data:', data);
-      return materialTypesApi.create(data);
+      
+      // Validazione lato client
+      if (!data.code?.trim()) {
+        throw new Error('Il codice è obbligatorio');
+      }
+      if (!data.name?.trim()) {
+        throw new Error('Il nome è obbligatorio');
+      }
+      if (!data.unit?.trim()) {
+        throw new Error('L\'unità di misura è obbligatoria');
+      }
+
+      // Prepara i dati
+      const payload: CreateMaterialTypeData = {
+        code: data.code.trim().toUpperCase(),
+        name: data.name.trim(),
+        description: data.description?.trim() || undefined,
+        unit: data.unit.trim(),
+        cerCode: data.cerCode?.trim() || undefined,
+        reference: data.reference?.trim() || undefined,
+        color: data.color || PREDEFINED_COLORS[0].value,
+        sortOrder: Number(data.sortOrder) || 0,
+        parentId: data.parentId || undefined,
+      };
+
+      console.log('📤 Sending payload:', payload);
+      return materialTypesApi.create(payload);
     },
     onSuccess: (result) => {
       console.log('✅ Material type created successfully:', result);
       setSubmitSuccess(true);
       setSubmitError(null);
+      
+      // Invalida le queries per aggiornare la cache
       queryClient.invalidateQueries({ queryKey: ['materialTypes'] });
       
-      // Reindirizza dopo un breve delay per mostrare il successo
+      // Reindirizza dopo un breve delay
       setTimeout(() => {
         navigate('/deliveries/material-types');
       }, 1500);
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('❌ Error creating material type:', error);
-      setSubmitError(error.message || 'Errore durante la creazione della tipologia di materiale');
+      
+      let errorMessage = 'Errore durante la creazione della tipologia di materiale';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        errorMessage = String(error.message);
+      }
+      
+      setSubmitError(errorMessage);
       setSubmitSuccess(false);
     },
   });
 
   // Mutation per aggiornamento
   const updateMutation = useMutation({
-    mutationFn: (data: UpdateMaterialTypeData) => {
+    mutationFn: async (data: UpdateMaterialTypeData) => {
       console.log('🔄 Updating material type:', id, 'with data:', data);
-      return materialTypesApi.update(id!, data);
+      
+      if (!id) {
+        throw new Error('ID materiale non trovato');
+      }
+
+      return materialTypesApi.update(id, data);
     },
     onSuccess: (result) => {
       console.log('✅ Material type updated successfully:', result);
       setSubmitSuccess(true);
       setSubmitError(null);
+      
+      // Invalida le queries
       queryClient.invalidateQueries({ queryKey: ['materialTypes', id] });
       queryClient.invalidateQueries({ queryKey: ['materialTypes'] });
       
-      // Reindirizza dopo un breve delay per mostrare il successo
+      // Reindirizza dopo un breve delay
       setTimeout(() => {
         navigate('/deliveries/material-types');
       }, 1500);
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('❌ Error updating material type:', error);
-      setSubmitError(error.message || 'Errore durante l\'aggiornamento della tipologia di materiale');
+      
+      let errorMessage = 'Errore durante l\'aggiornamento della tipologia di materiale';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        errorMessage = String(error.message);
+      }
+      
+      setSubmitError(errorMessage);
       setSubmitSuccess(false);
     },
   });
+
+  // ===============================
+  // EFFECTS
+  // ===============================
 
   // Effetto per popolamento form in modalità edit
   useEffect(() => {
@@ -181,6 +306,10 @@ const MaterialTypeForm: React.FC = () => {
     }
   }, [isEditMode, materialType, reset]);
 
+  // ===============================
+  // HANDLERS
+  // ===============================
+
   // Handler submit
   const onSubmit = async (data: FormData) => {
     console.log('📝 Submitting material type data:', data);
@@ -189,23 +318,12 @@ const MaterialTypeForm: React.FC = () => {
     setSubmitSuccess(false);
     
     try {
-      // Validazione aggiuntiva
-      if (!data.code.trim()) {
-        throw new Error('Codice è obbligatorio');
-      }
-      if (!data.name.trim()) {
-        throw new Error('Nome è obbligatorio');
-      }
-      if (!data.unit.trim()) {
-        throw new Error('Unità di misura è obbligatoria');
-      }
-
       // Prepara i dati per l'invio
       const dataToSave = {
-        code: data.code.trim().toUpperCase(),
-        name: data.name.trim(),
+        code: data.code?.trim().toUpperCase() || '',
+        name: data.name?.trim() || '',
         description: data.description?.trim() || undefined,
-        unit: data.unit.trim(),
+        unit: data.unit?.trim() || 'kg',
         cerCode: data.cerCode?.trim() || undefined,
         reference: data.reference?.trim() || undefined,
         color: data.color || PREDEFINED_COLORS[0].value,
@@ -223,11 +341,7 @@ const MaterialTypeForm: React.FC = () => {
       }
     } catch (error) {
       console.error('❌ Submit failed:', error);
-      if (error instanceof Error) {
-        setSubmitError(error.message);
-      } else {
-        setSubmitError('Errore sconosciuto durante il salvataggio');
-      }
+      // L'errore sarà gestito dalle mutations
     }
   };
 
@@ -235,6 +349,10 @@ const MaterialTypeForm: React.FC = () => {
   const handleCancel = () => {
     navigate('/deliveries/material-types');
   };
+
+  // ===============================
+  // RENDER CONDITIONS
+  // ===============================
 
   // Loading state
   if (isEditMode && (isLoadingMaterialType || isLoadingParentMaterialTypes)) {
@@ -283,6 +401,10 @@ const MaterialTypeForm: React.FC = () => {
     );
   }
 
+  // ===============================
+  // MAIN RENDER
+  // ===============================
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
@@ -302,6 +424,7 @@ const MaterialTypeForm: React.FC = () => {
         </Alert>
       )}
 
+      {/* Form */}
       <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
         <Grid container spacing={3}>
           {/* Informazioni Base */}
@@ -705,10 +828,12 @@ const MaterialTypeForm: React.FC = () => {
             <Typography variant="caption" component="div">
               Debug Form State:<br/>
               Valid: {isValid.toString()}<br/>
+              Dirty: {isDirty.toString()}<br/>
               Edit Mode: {isEditMode.toString()}<br/>
               Material Type ID: {id || 'N/A'}<br/>
               Submit Error: {submitError || 'None'}<br/>
-              Selected Color: {selectedColor}
+              Selected Color: {selectedColor}<br/>
+              Mutations Pending: {createMutation.isPending || updateMutation.isPending}
             </Typography>
           </Box>
         )}

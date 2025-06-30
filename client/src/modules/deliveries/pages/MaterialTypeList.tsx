@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/pages/MaterialTypesList.tsx - VERSIONE COMPLETAMENTE CORRETTA
+// client/src/modules/deliveries/pages/MaterialTypesList.tsx - VERSIONE PULITA
 
 import React, { useState } from 'react';
 import {
@@ -42,7 +42,37 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { materialTypesApi } from '../services/materialTypes.api';
-import type { MaterialType } from '../types/deliveries.types'; // Importa MaterialType, è utilizzata per la tipizzazione di allTypes
+
+// ===============================
+// INTERFACES LOCALI
+// ===============================
+
+interface LocalMaterialType {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  unit: string;
+  cerCode?: string;
+  reference?: string;
+  color?: string;
+  sortOrder: number;
+  parentId?: string;
+  parent?: LocalMaterialType;
+  children?: LocalMaterialType[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface MaterialTypesFilters {
+  includeInactive?: boolean;
+  isParent?: boolean;
+}
+
+// ===============================
+// COMPONENTE PRINCIPALE
+// ===============================
 
 const MaterialTypesList: React.FC = () => {
   const navigate = useNavigate();
@@ -65,6 +95,10 @@ const MaterialTypesList: React.FC = () => {
     return 'Errore sconosciuto';
   };
 
+  // ===============================
+  // QUERIES
+  // ===============================
+
   // Query per tutte le tipologie con gestione errori migliorata
   const {
     data: allTypes,
@@ -74,14 +108,18 @@ const MaterialTypesList: React.FC = () => {
     isError
   } = useQuery({
     queryKey: ['materialTypes', showInactive],
-    queryFn: async () => {
+    queryFn: async (): Promise<LocalMaterialType[]> => {
       console.log('🔍 Fetching material types...');
       try {
-        const result = await materialTypesApi.getAll({ includeInactive: showInactive });
+        const filters: MaterialTypesFilters = { includeInactive: showInactive };
+        const result = await materialTypesApi.getAll(filters);
         console.log('✅ Material types fetched successfully:', result.length);
+        setDebugInfo(`✅ ${result.length} tipologie caricate con successo`);
         return result;
-      } catch (error: unknown) { // Specifica error come unknown
+      } catch (error: unknown) {
         console.error('❌ Error in material types query:', error);
+        const errorMessage = getErrorMessage(error);
+        setDebugInfo(`❌ Errore: ${errorMessage}`);
         throw error;
       }
     },
@@ -90,22 +128,37 @@ const MaterialTypesList: React.FC = () => {
     refetchOnWindowFocus: false,
   });
 
+  // ===============================
+  // MUTATIONS
+  // ===============================
+
   // Mutation per eliminazione
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => materialTypesApi.delete(id),
+    mutationFn: (id: string) => {
+      console.log('🗑️ Deleting material type:', id);
+      setDebugInfo(`🗑️ Eliminazione tipologia ${id} in corso...`);
+      return materialTypesApi.delete(id);
+    },
     onSuccess: () => {
       console.log('✅ Material type deleted successfully');
+      setDebugInfo('✅ Tipologia eliminata con successo');
       queryClient.invalidateQueries({ queryKey: ['materialTypes'] });
     },
-    onError: (error: unknown) => { // Specifica error come unknown
+    onError: (error: unknown) => {
       console.error('❌ Delete mutation failed:', error);
-      alert(`Errore durante l'eliminazione: ${getErrorMessage(error)}`); // Usa la funzione helper
+      const errorMessage = getErrorMessage(error);
+      setDebugInfo(`❌ Errore eliminazione: ${errorMessage}`);
+      alert(`Errore durante l'eliminazione: ${errorMessage}`);
     },
   });
 
   // Test di connettività
   const testMutation = useMutation({
-    mutationFn: () => materialTypesApi.testConnection(),
+    mutationFn: () => {
+      console.log('🔍 Testing API connection...');
+      setDebugInfo('🔍 Test connessione in corso...');
+      return materialTypesApi.testConnection();
+    },
     onSuccess: (result) => {
       const message = result
         ? '✅ Connessione API riuscita!'
@@ -113,12 +166,17 @@ const MaterialTypesList: React.FC = () => {
       setDebugInfo(message);
       alert(message);
     },
-    onError: (error: unknown) => { // Specifica error come unknown
-      const message = `❌ Test connessione fallito: ${getErrorMessage(error)}`; // Usa la funzione helper
+    onError: (error: unknown) => {
+      const errorMessage = getErrorMessage(error);
+      const message = `❌ Test connessione fallito: ${errorMessage}`;
       setDebugInfo(message);
       alert(message);
     },
   });
+
+  // ===============================
+  // HANDLERS
+  // ===============================
 
   // ✅ HANDLER NAVIGAZIONE CORRETTO
   const handleCreateNew = () => {
@@ -150,9 +208,9 @@ const MaterialTypesList: React.FC = () => {
         console.log('='.repeat(50));
       }, 100);
 
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ Errore durante navigate():', error);
-      const errorMessage = getErrorMessage(error); // Usa la funzione helper
+      const errorMessage = getErrorMessage(error);
       setDebugInfo(prev => prev + ` -> ERRORE: ${errorMessage}`);
       alert(errorMessage);
     }
@@ -161,18 +219,22 @@ const MaterialTypesList: React.FC = () => {
   // ✅ HANDLER per modifica
   const handleEdit = (id: string) => {
     console.log('🔄 Editing material type:', id);
+    setDebugInfo(`🔄 Navigazione verso modifica tipologia ${id}`);
     try {
       navigate(`/deliveries/material-types/${id}/edit`);
       console.log('✅ Edit navigation successful');
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ Edit navigation failed:', error);
-      alert('Errore durante la navigazione alla modifica: ' + getErrorMessage(error)); // Usa la funzione helper
+      const errorMessage = getErrorMessage(error);
+      setDebugInfo(`❌ Errore navigazione modifica: ${errorMessage}`);
+      alert('Errore durante la navigazione alla modifica: ' + errorMessage);
     }
   };
 
   // ✅ HANDLER per visualizzazione
   const handleView = (id: string) => {
     console.log('👁️ Viewing material type:', id);
+    setDebugInfo(`👁️ Vista dettagli tipologia ${id}`);
     // Per ora solo log, in futuro implementare vista dettagli
     alert(`Vista dettagli per tipologia ${id} - Da implementare`);
   };
@@ -184,7 +246,7 @@ const MaterialTypesList: React.FC = () => {
         console.log('🗑️ Deleting material type:', id, name);
         await deleteMutation.mutateAsync(id);
         console.log('✅ Material type deleted successfully');
-      } catch (error: unknown) { // Specifica error come unknown
+      } catch (error: unknown) {
         console.error('❌ Delete failed:', error);
         // L'errore è già gestito nella mutation onError
       }
@@ -205,12 +267,20 @@ const MaterialTypesList: React.FC = () => {
     refetch();
   };
 
+  // ===============================
+  // DATA PROCESSING
+  // ===============================
+
   // Filtro materiali
   const filteredTypes = allTypes?.filter(type =>
     type.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     type.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
     type.description?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
+
+  // ===============================
+  // RENDER CONDITIONS
+  // ===============================
 
   // ✅ GESTIONE ERRORI MIGLIORATA
   if (isError && error) {
@@ -241,7 +311,7 @@ const MaterialTypesList: React.FC = () => {
           </Typography>
           <ul style={{ margin: 0, paddingLeft: 20 }}>
             <li>Backend non avviato (controllare http://localhost:4000)</li>
-            <li>Endpoint /api/material-types non disponibile</li>
+            <li>Endpoint /api/deliveries/material-types non disponibile</li>
             <li>Errore di connessione al database PostgreSQL</li>
             <li>Problema di autenticazione (token scaduto)</li>
             <li>CORS non configurato correttamente</li>
@@ -256,13 +326,17 @@ const MaterialTypesList: React.FC = () => {
           <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace' }}>
             URL Frontend: {window.location.href}<br/>
             Backend URL: {process.env.REACT_APP_API_URL || 'http://localhost:4000'}<br/>
-            Error Type: {error instanceof Error ? error.constructor.name : 'Unknown'}<br/> {/* Migliorato per tipi sconosciuti */}
+            Error Type: {error instanceof Error ? error.constructor.name : 'Unknown'}<br/>
             Error Details: {JSON.stringify(error, null, 2)}
           </Typography>
         </Paper>
       </Container>
     );
   }
+
+  // ===============================
+  // MAIN RENDER
+  // ===============================
 
   return (
     <Container maxWidth="xl">
@@ -618,6 +692,14 @@ const MaterialTypesList: React.FC = () => {
               Lista: /deliveries/material-types<br/>
               Nuovo: /deliveries/material-types/new<br/>
               Modifica: /deliveries/material-types/:id/edit
+            </Box>
+
+            <Typography variant="subtitle2" gutterBottom>API Endpoints:</Typography>
+            <Box sx={{ mb: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
+              GET: /api/deliveries/material-types<br/>
+              POST: /api/deliveries/material-types<br/>
+              PUT: /api/deliveries/material-types/:id<br/>
+              DELETE: /api/deliveries/material-types/:id
             </Box>
 
             <Typography variant="subtitle2" gutterBottom>Debug Log:</Typography>

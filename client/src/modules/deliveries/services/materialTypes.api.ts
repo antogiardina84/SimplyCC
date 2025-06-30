@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/services/materialTypes.api.ts - VERSIONE CORRETTA COMPLETA
+// client/src/modules/deliveries/services/materialTypes.api.ts - ENDPOINTS CORRETTI
 
 import api from '../../../core/services/api';
 import type {
@@ -9,7 +9,7 @@ import type {
   MaterialTypesFilters,
   MaterialTypeStatistics
 } from '../types/deliveries.types';
-import axios, { AxiosError } from 'axios'; // Importa AxiosError per una migliore gestione dei tipi di errore
+import { AxiosError } from 'axios';
 
 export const materialTypesApi = {
   // ✅ CORRETTO: Ottieni tutte le tipologie materiali
@@ -27,16 +27,19 @@ export const materialTypesApi = {
 
       console.log('🔍 Fetching material types with params:', params.toString());
 
-      // 🔧 BACKEND ENDPOINT: GET /material-types
+      // 🚨 FIX: Endpoint corretto dal backend - rimuovi /deliveries/
       const response = await api.get(`/material-types?${params.toString()}`);
 
       console.log('✅ Material types loaded:', response.data);
       return response.data;
 
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ Error fetching material types:', error);
-      if (error instanceof AxiosError) { // Controlla se è un errore Axios
-        throw new Error(error.response?.data?.message || error.message);
+      if (error instanceof AxiosError) {
+        throw new Error(
+          error.response?.data?.message || 
+          `Endpoint tipologie materiali non trovato. Verificare che il backend sia attivo. Status: ${error.response?.status}`
+        );
       }
       throw error;
     }
@@ -47,15 +50,15 @@ export const materialTypesApi = {
     try {
       console.log('🔍 Fetching material type by ID:', id);
 
-      // 🔧 BACKEND ENDPOINT: GET /material-types/:id
+      // 🚨 FIX: Endpoint corretto
       const response = await api.get(`/material-types/${id}`);
 
       console.log('✅ Material type loaded:', response.data);
       return response.data;
 
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ Error fetching material type by ID:', error);
-      if (error instanceof AxiosError) { // Controlla se è un errore Axios
+      if (error instanceof AxiosError) {
         throw new Error(error.response?.data?.message || error.message);
       }
       throw error;
@@ -67,15 +70,15 @@ export const materialTypesApi = {
     try {
       console.log('🔍 Fetching material type by code:', code);
 
-      // 🔧 BACKEND ENDPOINT: GET /material-types/code/:code
+      // 🚨 FIX: Endpoint corretto
       const response = await api.get(`/material-types/code/${code}`);
 
       console.log('✅ Material type by code loaded:', response.data);
       return response.data;
 
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ Error fetching material type by code:', error);
-      if (error instanceof AxiosError) { // Controlla se è un errore Axios
+      if (error instanceof AxiosError) {
         throw new Error(error.response?.data?.message || error.message);
       }
       throw error;
@@ -87,15 +90,15 @@ export const materialTypesApi = {
     try {
       console.log('🔍 Fetching material types hierarchy...');
 
-      // 🔧 BACKEND ENDPOINT: GET /material-types/hierarchy
+      // 🚨 FIX: Endpoint corretto
       const response = await api.get('/material-types/hierarchy');
 
       console.log('✅ Material types hierarchy loaded:', response.data);
       return response.data;
 
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ Error fetching material types hierarchy:', error);
-      if (error instanceof AxiosError) { // Controlla se è un errore Axios
+      if (error instanceof AxiosError) {
         throw new Error(error.response?.data?.message || error.message);
       }
       throw error;
@@ -120,7 +123,7 @@ export const materialTypesApi = {
 
       // Prepara i dati per l'invio
       const payload: CreateMaterialTypeData = {
-        code: data.code.trim().toUpperCase(), // Normalizza codice
+        code: data.code.trim().toUpperCase(),
         name: data.name.trim(),
         description: data.description?.trim() || undefined,
         unit: data.unit.trim() || 'kg',
@@ -133,17 +136,16 @@ export const materialTypesApi = {
 
       console.log('📤 Sending payload:', payload);
 
-      // 🔧 BACKEND ENDPOINT: POST /material-types
+      // 🚨 FIX: Endpoint corretto - rimuovi /deliveries/
       const response = await api.post('/material-types', payload);
 
       console.log('✅ Material type created successfully:', response.data);
       return response.data;
 
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ Error creating material type:', error);
 
-      // Gestione errori più specifica
-      if (error instanceof AxiosError && error.response) { // Verifica che sia un AxiosError e abbia una risposta
+      if (error instanceof AxiosError && error.response) {
         if (error.response.status === 400) {
           const message = error.response.data?.message || 'Dati non validi';
           throw new Error(`Errore di validazione: ${message}`);
@@ -151,13 +153,15 @@ export const materialTypesApi = {
           throw new Error('Codice tipologia materiale già esistente');
         } else if (error.response.status === 500) {
           throw new Error('Errore interno del server. Riprova più tardi.');
+        } else if (error.response.status === 404) {
+          throw new Error('Endpoint non trovato. Verificare che il backend sia attivo e che le routes siano configurate correttamente.');
         }
       }
-      // Se non è un AxiosError o non ha una risposta specifica
+      
       if (error instanceof Error) {
         throw new Error(error.message || 'Errore durante la creazione della tipologia materiale');
       }
-      throw new Error('Errore sconosciuto durante la creazione della tipologia materiale'); // Errore generico
+      throw new Error('Errore sconosciuto durante la creazione della tipologia materiale');
     }
   },
 
@@ -166,7 +170,6 @@ export const materialTypesApi = {
     try {
       console.log('🔄 Updating material type:', id, 'with data:', data);
 
-      // Prepara i dati per l'aggiornamento (rimuovi campi undefined)
       const payload: UpdateMaterialTypeData = {};
 
       if (data.code !== undefined) payload.code = data.code.trim().toUpperCase();
@@ -182,17 +185,16 @@ export const materialTypesApi = {
 
       console.log('📤 Sending update payload:', payload);
 
-      // 🔧 BACKEND ENDPOINT: PUT /material-types/:id
+      // 🚨 FIX: Endpoint corretto
       const response = await api.put(`/material-types/${id}`, payload);
 
       console.log('✅ Material type updated successfully:', response.data);
       return response.data;
 
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ Error updating material type:', error);
 
-      // Gestione errori specifica
-      if (error instanceof AxiosError && error.response) { // Verifica che sia un AxiosError e abbia una risposta
+      if (error instanceof AxiosError && error.response) {
         if (error.response.status === 404) {
           throw new Error('Tipologia materiale non trovata');
         } else if (error.response.status === 400) {
@@ -202,11 +204,11 @@ export const materialTypesApi = {
           throw new Error('Codice tipologia materiale già esistente');
         }
       }
-      // Se non è un AxiosError o non ha una risposta specifica
+      
       if (error instanceof Error) {
         throw new Error(error.message || 'Errore durante l\'aggiornamento della tipologia materiale');
       }
-      throw new Error('Errore sconosciuto durante l\'aggiornamento della tipologia materiale'); // Errore generico
+      throw new Error('Errore sconosciuto durante l\'aggiornamento della tipologia materiale');
     }
   },
 
@@ -215,17 +217,16 @@ export const materialTypesApi = {
     try {
       console.log('🗑️ Deleting material type:', id);
 
-      // 🔧 BACKEND ENDPOINT: DELETE /material-types/:id
-      await api.delete(`/material-types/${id}`); // Rimosso 'const response =' perché non utilizzata e il tipo di ritorno è void
+      // 🚨 FIX: Endpoint corretto
+      await api.delete(`/material-types/${id}`);
 
       console.log('✅ Material type deleted successfully');
-      return; // Restituisce void come specificato dal Promise<void>
+      return;
 
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ Error deleting material type:', error);
 
-      // Gestione errori specifica
-      if (error instanceof AxiosError && error.response) { // Verifica che sia un AxiosError e abbia una risposta
+      if (error instanceof AxiosError && error.response) {
         if (error.response.status === 404) {
           throw new Error('Tipologia materiale non trovata');
         } else if (error.response.status === 400) {
@@ -233,11 +234,11 @@ export const materialTypesApi = {
           throw new Error(`Errore: ${message}`);
         }
       }
-      // Se non è un AxiosError o non ha una risposta specifica
+      
       if (error instanceof Error) {
         throw new Error(error.message || 'Errore durante l\'eliminazione della tipologia materiale');
       }
-      throw new Error('Errore sconosciuto durante l\'eliminazione della tipologia materiale'); // Errore generico
+      throw new Error('Errore sconosciuto durante l\'eliminazione della tipologia materiale');
     }
   },
 
@@ -249,38 +250,37 @@ export const materialTypesApi = {
 
       console.log('📊 Fetching material type statistics for:', id);
 
-      // 🔧 BACKEND ENDPOINT: GET /material-types/:id/statistics
+      // 🚨 FIX: Endpoint corretto
       const response = await api.get(`/material-types/${id}/statistics?${params.toString()}`);
 
       console.log('✅ Material type statistics loaded:', response.data);
       return response.data;
 
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ Error fetching material type statistics:', error);
-      if (error instanceof AxiosError) { // Controlla se è un errore Axios
+      if (error instanceof AxiosError) {
         throw new Error(error.response?.data?.message || error.message);
       }
       throw error;
     }
   },
 
-  // ✅ EXTRA: Metodo di test per verificare connettività
+  // ✅ EXTRA: Test connessione
   testConnection: async (): Promise<boolean> => {
     try {
       console.log('🔍 Testing material types API connection...');
 
-      await api.get('/material-types?includeInactive=false'); // Rimosso 'const response =' perché non utilizzata
+      // 🚨 FIX: Endpoint corretto per test
+      await api.get('/material-types?includeInactive=false');
 
       console.log('✅ API connection test successful');
       return true;
 
-    } catch (error: unknown) { // Specifica error come unknown
+    } catch (error: unknown) {
       console.error('❌ API connection test failed:', error);
-      // Non c'è bisogno di rilanciare l'errore qui, si ritorna false
       return false;
     }
   }
 };
 
-// ✅ EXPORT DEFAULT per compatibilità
 export default materialTypesApi;
