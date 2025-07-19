@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/pages/MaterialTypeForm.tsx - VERSIONE CORRETTA COMPLETA
+// client/src/modules/deliveries/pages/MaterialTypeForm.tsx - VERSIONE CORRETTA
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -6,7 +6,7 @@ import {
   Container,
   Typography,
   Box,
-  Paper,
+  Paper, // Re-aggiunto Paper
   TextField,
   Button,
   FormControl,
@@ -23,7 +23,8 @@ import {
   CardContent,
   Divider
 } from '@mui/material';
-import { ArrowBack, Save, Cancel, Palette, Info } from '@mui/icons-material';
+import { ArrowBack, Save, Cancel, Info } from '@mui/icons-material';
+// Palette rimosso in quanto non utilizzato
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { materialTypesApi } from '../services/materialTypes.api';
@@ -41,7 +42,7 @@ interface FormData {
   reference?: string;
   color?: string;
   sortOrder?: number;
-  parentId?: string;
+  parentId?: string | null; // Modificato per accettare null
   isActive?: boolean;
 }
 
@@ -54,57 +55,22 @@ interface CreateMaterialTypeData {
   reference?: string;
   color?: string;
   sortOrder?: number;
-  parentId?: string;
-}
-
-interface UpdateMaterialTypeData extends Partial<CreateMaterialTypeData> {
+  parentId?: string | null; // Modificato per accettare null
   isActive?: boolean;
 }
 
-interface MaterialType {
-  id: string;
-  code: string;
-  name: string;
-  description?: string;
-  unit: string;
-  cerCode?: string;
-  reference?: string;
-  color?: string;
-  sortOrder: number;
-  parentId?: string;
-  parent?: MaterialType;
-  children?: MaterialType[];
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+interface UpdateMaterialTypeData extends CreateMaterialTypeData {}
 
-// ===============================
-// COSTANTI
-// ===============================
-
-const PREDEFINED_COLORS = [
-  { name: 'Blu', value: '#2196F3' },
-  { name: 'Verde', value: '#4CAF50' },
-  { name: 'Arancione', value: '#FF9800' },
-  { name: 'Viola', value: '#9C27B0' },
-  { name: 'Rosso', value: '#F44336' },
-  { name: 'Azzurro', value: '#00BCD4' },
-  { name: 'Giallo', value: '#FFEB3B' },
-  { name: 'Marrone', value: '#795548' },
-  { name: 'Grigio Blu', value: '#607D8B' },
-  { name: 'Rosa', value: '#E91E63' },
-  { name: 'Indaco', value: '#3F51B5' },
-  { name: 'Verde Acqua', value: '#009688' },
-  { name: 'Verde Chiaro', value: '#8BC34A' },
-  { name: 'Lime', value: '#CDDC39' },
-  { name: 'Ambra', value: '#FFC107' },
-  { name: 'Rosso Scuro', value: '#FF5722' },
-];
-
-const PREDEFINED_UNITS = ['kg', 'ton', 'mc', 'lt', 'pz'];
-
-const PREDEFINED_REFERENCES = ['COREPLA', 'CORIPET', 'COMIECO', 'CIAL', 'COREVE', 'RICREA'];
+// Funzione helper per ottenere il messaggio di errore
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return String(error.message);
+  }
+  return 'Errore sconosciuto';
+};
 
 // ===============================
 // COMPONENTE PRINCIPALE
@@ -116,287 +82,207 @@ const MaterialTypeForm: React.FC = () => {
   const queryClient = useQueryClient();
   const isEditMode = !!id;
 
-  // Stati locali
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [selectedColor, setSelectedColor] = useState<string>('#9E9E9E'); // Default color
+  const [parentOptions, setParentOptions] = useState<any[]>([]); // Lista semplificata per i genitori
 
-  // Form configuration
-  const { 
-    control, 
-    handleSubmit, 
-    reset, 
-    watch, 
-    setValue, 
-    formState: { errors, isValid, isDirty } 
+  // Utilizza i colori di Material UI come base per i colori predefiniti
+  const defaultColors = [
+    '#F44336', '#E91E63', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3',
+    '#03A9F4', '#00BCD4', '#009688', '#4CAF50', '#8BC34A', '#CDDC39',
+    '#FFEB3B', '#FFC107', '#FF9800', '#FF5722', '#795548', '#9E9E9E',
+    '#607D8B', '#000000'
+  ];
+
+  // Gestione del form con react-hook-form
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState: { errors, isValid, isDirty },
+    watch,
   } = useForm<FormData>({
+    mode: 'onChange',
     defaultValues: {
       code: '',
       name: '',
-      description: '',
       unit: 'kg',
-      cerCode: '',
-      reference: '',
-      color: PREDEFINED_COLORS[0].value,
       sortOrder: 0,
-      parentId: '',
       isActive: true,
+      color: '#9E9E9E',
+      parentId: null, // Default per parentId è null
     },
-    mode: 'onChange',
   });
 
-  // Watch per preview del colore
-  const selectedColor = watch('color');
+  const watchColor = watch('color', selectedColor);
 
   // ===============================
   // QUERIES
   // ===============================
 
-  // Query per il material type (solo in modalità edit)
-  const { 
-    data: materialType, 
-    isLoading: isLoadingMaterialType, 
-    isError: isErrorMaterialType,
-    error: materialTypeError 
-  } = useQuery({
-    queryKey: ['materialTypes', id],
+  // Query per ottenere i dettagli della tipologia se in modalità modifica
+  const { data: materialType, isLoading: isMaterialTypeLoading, isError: isMaterialTypeError, error: materialTypeError } = useQuery({
+    queryKey: ['materialType', id],
     queryFn: () => materialTypesApi.getById(id!),
-    enabled: isEditMode,
-    retry: 3,
+    enabled: isEditMode, // Esegue la query solo se in modalità modifica
   });
 
-  // Query per i material types parent (solo categorie principali)
-  const { 
-    data: parentMaterialTypes, 
-    isLoading: isLoadingParentMaterialTypes 
-  } = useQuery({
-    queryKey: ['materialTypes', 'parents'],
-    queryFn: async () => {
-      const response = await materialTypesApi.getAll({ includeInactive: false });
-      return response.filter(mt => !mt.parentId); // Solo quelli senza parent
-    },
+  // Query per ottenere le opzioni dei genitori (solo categorie principali, non se stessi)
+  const { isLoading: isParentsLoading, isError: isParentsError, error: parentsError } = useQuery({
+    queryKey: ['materialTypes', { isParent: true }],
+    queryFn: () => materialTypesApi.getAll({ isParent: true }),
+    onSuccess: (data) => {
+      // Filtra se stessi in modalità modifica
+      const filteredParents = data.filter(p => p.id !== id);
+      setParentOptions(filteredParents);
+    }
   });
 
   // ===============================
   // MUTATIONS
   // ===============================
 
-  // Mutation per creazione
+  // Mutation per la creazione
   const createMutation = useMutation({
-    mutationFn: async (data: CreateMaterialTypeData) => {
-      console.log('🚀 Creating material type with data:', data);
-      
-      // Validazione lato client
-      if (!data.code?.trim()) {
-        throw new Error('Il codice è obbligatorio');
-      }
-      if (!data.name?.trim()) {
-        throw new Error('Il nome è obbligatorio');
-      }
-      if (!data.unit?.trim()) {
-        throw new Error('L\'unità di misura è obbligatoria');
-      }
-
-      // Prepara i dati
-      const payload: CreateMaterialTypeData = {
-        code: data.code.trim().toUpperCase(),
-        name: data.name.trim(),
-        description: data.description?.trim() || undefined,
-        unit: data.unit.trim(),
-        cerCode: data.cerCode?.trim() || undefined,
-        reference: data.reference?.trim() || undefined,
-        color: data.color || PREDEFINED_COLORS[0].value,
-        sortOrder: Number(data.sortOrder) || 0,
-        parentId: data.parentId || undefined,
-      };
-
-      console.log('📤 Sending payload:', payload);
-      return materialTypesApi.create(payload);
-    },
-    onSuccess: (result) => {
-      console.log('✅ Material type created successfully:', result);
-      setSubmitSuccess(true);
-      setSubmitError(null);
-      
-      // Invalida le queries per aggiornare la cache
+    mutationFn: (data: CreateMaterialTypeData) => materialTypesApi.create(data),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materialTypes'] });
-      
-      // Reindirizza dopo un breve delay
-      setTimeout(() => {
-        navigate('/deliveries/material-types');
-      }, 1500);
+      navigate('/deliveries/material-types');
     },
-    onError: (error: unknown) => {
-      console.error('❌ Error creating material type:', error);
-      
-      let errorMessage = 'Errore durante la creazione della tipologia di materiale';
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'object' && error !== null && 'message' in error) {
-        errorMessage = String(error.message);
-      }
-      
-      setSubmitError(errorMessage);
-      setSubmitSuccess(false);
+    onError: (error: any) => {
+      setSubmitError(getErrorMessage(error)); // Usato helper function
     },
   });
 
-  // Mutation per aggiornamento
+  // Mutation per l'aggiornamento
   const updateMutation = useMutation({
-    mutationFn: async (data: UpdateMaterialTypeData) => {
-      console.log('🔄 Updating material type:', id, 'with data:', data);
-      
-      if (!id) {
-        throw new Error('ID materiale non trovato');
-      }
-
-      return materialTypesApi.update(id, data);
-    },
-    onSuccess: (result) => {
-      console.log('✅ Material type updated successfully:', result);
-      setSubmitSuccess(true);
-      setSubmitError(null);
-      
-      // Invalida le queries
-      queryClient.invalidateQueries({ queryKey: ['materialTypes', id] });
+    mutationFn: (data: UpdateMaterialTypeData) => materialTypesApi.update(id!, data),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['materialTypes'] });
-      
-      // Reindirizza dopo un breve delay
-      setTimeout(() => {
-        navigate('/deliveries/material-types');
-      }, 1500);
+      queryClient.invalidateQueries({ queryKey: ['materialType', id] });
+      navigate('/deliveries/material-types');
     },
-    onError: (error: unknown) => {
-      console.error('❌ Error updating material type:', error);
-      
-      let errorMessage = 'Errore durante l\'aggiornamento della tipologia di materiale';
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'object' && error !== null && 'message' in error) {
-        errorMessage = String(error.message);
-      }
-      
-      setSubmitError(errorMessage);
-      setSubmitSuccess(false);
+    onError: (error: any) => {
+      setSubmitError(getErrorMessage(error)); // Usato helper function
     },
   });
 
   // ===============================
-  // EFFECTS
+  // SIDE EFFECTS
   // ===============================
 
-  // Effetto per popolamento form in modalità edit
+  // Popola il form in modalità modifica quando i dati sono caricati
   useEffect(() => {
     if (isEditMode && materialType) {
-      console.log('📝 Populating form with material type data:', materialType);
-      
       reset({
         code: materialType.code,
         name: materialType.name,
-        description: materialType.description || '',
+        description: materialType.description,
         unit: materialType.unit,
-        cerCode: materialType.cerCode || '',
-        reference: materialType.reference || '',
-        color: materialType.color || PREDEFINED_COLORS[0].value,
-        sortOrder: materialType.sortOrder || 0,
-        parentId: materialType.parentId || '',
+        cerCode: materialType.cerCode,
+        reference: materialType.reference,
+        color: materialType.color || '#9E9E9E',
+        sortOrder: materialType.sortOrder,
+        // Assicura che parentId sia una stringa o null, non undefined
+        parentId: materialType.parentId || null, 
         isActive: materialType.isActive,
       });
+      setSelectedColor(materialType.color || '#9E9E9E');
     }
   }, [isEditMode, materialType, reset]);
+
+  // Aggiorna lo stato del colore selezionato
+  useEffect(() => {
+    if (watchColor) {
+      setSelectedColor(watchColor);
+    }
+  }, [watchColor]);
 
   // ===============================
   // HANDLERS
   // ===============================
 
-  // Handler submit
-  const onSubmit = async (data: FormData) => {
-    console.log('📝 Submitting material type data:', data);
-    
+  // Gestione invio form
+  const onSubmit = (data: FormData) => {
     setSubmitError(null);
-    setSubmitSuccess(false);
-    
-    try {
-      // Prepara i dati per l'invio
-      const dataToSave = {
-        code: data.code?.trim().toUpperCase() || '',
-        name: data.name?.trim() || '',
-        description: data.description?.trim() || undefined,
-        unit: data.unit?.trim() || 'kg',
-        cerCode: data.cerCode?.trim() || undefined,
-        reference: data.reference?.trim() || undefined,
-        color: data.color || PREDEFINED_COLORS[0].value,
-        sortOrder: Number(data.sortOrder) || 0,
-        parentId: data.parentId || undefined,
-        ...(isEditMode && { isActive: data.isActive }),
-      };
 
-      console.log('📤 Prepared data for submission:', dataToSave);
+    // Corretto: Assicura che parentId sia null se è una stringa vuota (''), come richiesto dall'interfaccia.
+    const dataToSubmit: CreateMaterialTypeData | UpdateMaterialTypeData = {
+      ...data,
+      sortOrder: data.sortOrder ?? 0,
+      isActive: data.isActive ?? true,
+      parentId: data.parentId === '' ? null : data.parentId,
+    };
 
-      if (isEditMode) {
-        await updateMutation.mutateAsync(dataToSave as UpdateMaterialTypeData);
-      } else {
-        await createMutation.mutateAsync(dataToSave as CreateMaterialTypeData);
-      }
-    } catch (error) {
-      console.error('❌ Submit failed:', error);
-      // L'errore sarà gestito dalle mutations
+    if (isEditMode) {
+      updateMutation.mutate(dataToSubmit as UpdateMaterialTypeData);
+    } else {
+      createMutation.mutate(dataToSubmit as CreateMaterialTypeData);
     }
   };
 
-  // Handler cancel
   const handleCancel = () => {
     navigate('/deliveries/material-types');
   };
 
   // ===============================
-  // RENDER CONDITIONS
+  // RENDER LOGICA
   // ===============================
 
-  // Loading state
-  if (isEditMode && (isLoadingMaterialType || isLoadingParentMaterialTypes)) {
+  // Gestione caricamento e errori in modalità modifica
+  if (isEditMode && (isMaterialTypeLoading || isParentsLoading)) {
     return (
-      <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-        <Box sx={{ textAlign: 'center' }}>
-          <CircularProgress />
-          <Typography sx={{ mt: 2 }}>Caricamento tipologia materiale...</Typography>
-        </Box>
+      <Container maxWidth="md" sx={{ textAlign: 'center', mt: 5 }}>
+        <CircularProgress />
+        <Typography variant="h6" sx={{ mt: 2 }}>
+          Caricamento dati tipologia...
+        </Typography>
       </Container>
     );
   }
 
-  // Error state
-  if (isEditMode && isErrorMaterialType) {
+  if (isEditMode && isMaterialTypeError) {
     return (
-      <Container sx={{ mt: 4 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          Errore durante il caricamento della tipologia di materiale:
-          <br />
-          {materialTypeError instanceof Error ? materialTypeError.message : 'Errore sconosciuto'}
+      <Container maxWidth="md" sx={{ mt: 5 }}>
+        <Alert severity="error">
+          <Typography variant="h6">Errore nel caricamento della tipologia</Typography>
+          {/* Corretto: Utilizza getErrorMessage per un accesso sicuro */}
+          <Typography>{getErrorMessage(materialTypeError)}</Typography>
+          <Box sx={{ mt: 2 }}>
+            <Button onClick={handleCancel} startIcon={<ArrowBack />} variant="outlined">
+              Torna alla lista
+            </Button>
+          </Box>
         </Alert>
-        <Button onClick={handleCancel} sx={{ mt: 2 }}>
-          Torna alla Lista
-        </Button>
       </Container>
     );
   }
 
-  // Success state
-  if (submitSuccess) {
+  if (isParentsError) {
     return (
-      <Container sx={{ mt: 4 }}>
-        <Alert severity="success" sx={{ mb: 2 }}>
-          <Typography variant="h6">
-            ✅ {isEditMode ? 'Tipologia aggiornata' : 'Tipologia creata'} con successo!
-          </Typography>
-          <Typography variant="body2">
-            Reindirizzamento alla lista in corso...
-          </Typography>
+      <Container maxWidth="md" sx={{ mt: 5 }}>
+        <Alert severity="warning">
+          <Typography variant="h6">Attenzione: Errore nel caricamento delle categorie genitore</Typography>
+          {/* Corretto: Utilizza getErrorMessage per un accesso sicuro */}
+          <Typography>Non sarai in grado di selezionare un genitore per questa tipologia. {getErrorMessage(parentsError)}</Typography>
         </Alert>
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-          <CircularProgress />
-        </Box>
+      </Container>
+    );
+  }
+
+  // Visualizza un messaggio se non è stato trovato un ID in modalità modifica
+  if (isEditMode && !materialType) {
+    return (
+      <Container maxWidth="md" sx={{ mt: 5 }}>
+        <Alert severity="warning">
+          <Typography variant="h6">Tipologia Materiale non trovata</Typography>
+          <Typography>Impossibile caricare i dati per l'ID specificato.</Typography>
+          <Box sx={{ mt: 2 }}>
+            <Button onClick={handleCancel} startIcon={<ArrowBack />} variant="outlined">
+              Torna alla lista
+            </Button>
+          </Box>
+        </Alert>
       </Container>
     );
   }
@@ -406,363 +292,240 @@ const MaterialTypeForm: React.FC = () => {
   // ===============================
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <IconButton onClick={handleCancel} sx={{ mr: 1 }}>
+    <Container maxWidth="lg">
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 4 }}>
+        <IconButton onClick={handleCancel} sx={{ mr: 2 }}>
           <ArrowBack />
         </IconButton>
         <Typography variant="h4" component="h1">
-          {isEditMode ? 'Modifica Tipologia Materiale' : 'Nuova Tipologia Materiale'}
+          {isEditMode ? 'Aggiorna Tipologia Materiale' : 'Crea Nuova Tipologia Materiale'}
         </Typography>
       </Box>
 
-      {/* Alert per errori */}
-      {submitError && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setSubmitError(null)}>
-          {submitError}
-        </Alert>
-      )}
+      <Grid container spacing={4}>
+        <Grid item xs={12} md={8}>
+          <Paper elevation={3} sx={{ p: 4 }}>
+            <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
+              <Grid container spacing={3}>
 
-      {/* Form */}
-      <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
-        <Grid container spacing={3}>
-          {/* Informazioni Base */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Info />
-                  Informazioni Base
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                <Grid container spacing={2}>
-                  {/* Codice */}
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="code"
-                      control={control}
-                      rules={{ 
-                        required: 'Codice è obbligatorio',
-                        pattern: {
-                          value: /^[A-Z0-9_-]+$/,
-                          message: 'Solo lettere maiuscole, numeri, trattini e underscore'
-                        }
-                      }}
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          fullWidth
-                          label="Codice *"
-                          placeholder="es. MONO, MULTI, PLASTICA"
-                          error={!!errors.code}
-                          helperText={errors.code?.message || 'Codice identificativo univoco'}
-                          inputProps={{ 
-                            style: { textTransform: 'uppercase' },
-                            maxLength: 20
-                          }}
-                          onChange={(e) => {
-                            const value = e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-                            field.onChange(value);
-                          }}
-                        />
-                      )}
-                    />
-                  </Grid>
-
-                  {/* Nome */}
-                  <Grid item xs={12} sm={6}>
-                    <Controller
-                      name="name"
-                      control={control}
-                      rules={{ 
-                        required: 'Nome è obbligatorio',
-                        minLength: {
-                          value: 2,
-                          message: 'Il nome deve essere di almeno 2 caratteri'
-                        }
-                      }}
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          fullWidth
-                          label="Nome *"
-                          placeholder="es. Monomateriale Plastica"
-                          error={!!errors.name}
-                          helperText={errors.name?.message || 'Nome descrittivo della tipologia'}
-                          inputProps={{ maxLength: 100 }}
-                        />
-                      )}
-                    />
-                  </Grid>
-
-                  {/* Descrizione */}
-                  <Grid item xs={12}>
-                    <Controller
-                      name="description"
-                      control={control}
-                      render={({ field }) => (
-                        <TextField
-                          {...field}
-                          fullWidth
-                          multiline
-                          rows={3}
-                          label="Descrizione"
-                          placeholder="Descrizione dettagliata della tipologia di materiale..."
-                          helperText="Informazioni aggiuntive sulla tipologia (opzionale)"
-                          inputProps={{ maxLength: 500 }}
-                        />
-                      )}
-                    />
-                  </Grid>
+                {/* Sezione Base */}
+                <Grid item xs={12}>
+                  <Typography variant="h6" gutterBottom>Dettagli Base</Typography>
+                  <Divider sx={{ mb: 3 }} />
                 </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
 
-          {/* Configurazione Tecnica */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Configurazione Tecnica
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                <Grid container spacing={2}>
-                  {/* Unità di Misura */}
-                  <Grid item xs={12} sm={6} md={3}>
-                    <FormControl fullWidth error={!!errors.unit}>
-                      <InputLabel id="unit-label">Unità di Misura *</InputLabel>
-                      <Controller
-                        name="unit"
-                        control={control}
-                        rules={{ required: 'Unità di misura è obbligatoria' }}
-                        render={({ field }) => (
-                          <Select
-                            {...field}
-                            labelId="unit-label"
-                            label="Unità di Misura *"
-                          >
-                            {PREDEFINED_UNITS.map((unit) => (
-                              <MenuItem key={unit} value={unit}>
-                                {unit}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        )}
+                {/* Nome e Codice */}
+                <Grid item xs={12} sm={6}>
+                  <Controller
+                    name="name"
+                    control={control}
+                    rules={{ required: 'Il nome è obbligatorio' }}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Nome Tipologia"
+                        fullWidth
+                        required
+                        error={!!errors.name}
+                        helperText={errors.name?.message}
                       />
-                      {errors.unit && (
-                        <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.75 }}>
-                          {errors.unit.message}
-                        </Typography>
-                      )}
-                    </FormControl>
-                  </Grid>
+                    )}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Controller
+                    name="code"
+                    control={control}
+                    rules={{
+                      required: 'Il codice è obbligatorio',
+                      pattern: {
+                        value: /^[A-Z0-9_-]+$/,
+                        message: 'Il codice può contenere solo lettere maiuscole, numeri, trattini e underscore.',
+                      },
+                    }}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Codice Interno"
+                        fullWidth
+                        required
+                        error={!!errors.code}
+                        helperText={errors.code?.message}
+                      />
+                    )}
+                  />
+                </Grid>
 
-                  {/* Codice CER */}
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Controller
-                      name="cerCode"
-                      control={control}
-                      render={({ field }) => (
-                        <TextField
+                {/* Descrizione e Unità */}
+                <Grid item xs={12} sm={9}>
+                  <Controller
+                    name="description"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Descrizione (opzionale)"
+                        fullWidth
+                        multiline
+                        rows={3}
+                      />
+                    )}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <Controller
+                    name="unit"
+                    control={control}
+                    rules={{ required: 'L\'unità è obbligatoria' }}
+                    render={({ field }) => (
+                      <FormControl fullWidth error={!!errors.unit} required>
+                        <InputLabel>Unità di Misura</InputLabel>
+                        <Select {...field} label="Unità di Misura">
+                          <MenuItem value="kg">Kg</MenuItem>
+                          <MenuItem value="t">Tonnellate</MenuItem>
+                          <MenuItem value="m³">m³</MenuItem>
+                          <MenuItem value="pezzi">Pezzi</MenuItem>
+                          <MenuItem value="litri">Litri</MenuItem>
+                        </Select>
+                      </FormControl>
+                    )}
+                  />
+                </Grid>
+
+                {/* Sezione Codici e Riferimenti */}
+                <Grid item xs={12}>
+                  <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>Codici e Classificazioni</Typography>
+                  <Divider sx={{ mb: 3 }} />
+                </Grid>
+
+                {/* Codice CER e Riferimento Esterno */}
+                <Grid item xs={12} sm={6}>
+                  <Controller
+                    name="cerCode"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Codice CER (opzionale)"
+                        fullWidth
+                        placeholder="Es. 15 01 01"
+                      />
+                    )}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Controller
+                    name="reference"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Riferimento Esterno (opzionale)"
+                        fullWidth
+                      />
+                    )}
+                  />
+                </Grid>
+
+                {/* Sezione Gerarchia e Ordinamento */}
+                <Grid item xs={12}>
+                  <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>Gerarchia e Proprietà</Typography>
+                  <Divider sx={{ mb: 3 }} />
+                </Grid>
+
+                {/* Genitore e Ordine */}
+                <Grid item xs={12} sm={6}>
+                  <Controller
+                    name="parentId"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControl fullWidth>
+                        <InputLabel>Categoria Genitore (opzionale)</InputLabel>
+                        <Select
                           {...field}
-                          fullWidth
-                          label="Codice CER"
-                          placeholder="es. 150102"
-                          helperText="Codice Europeo Rifiuti (opzionale)"
-                          inputProps={{ 
-                            maxLength: 10,
-                            pattern: '[0-9]*'
-                          }}
-                        />
-                      )}
-                    />
-                  </Grid>
-
-                  {/* Riferimento */}
-                  <Grid item xs={12} sm={6} md={3}>
-                    <FormControl fullWidth>
-                      <InputLabel id="reference-label">Riferimento</InputLabel>
-                      <Controller
-                        name="reference"
-                        control={control}
-                        render={({ field }) => (
-                          <Select
-                            {...field}
-                            labelId="reference-label"
-                            label="Riferimento"
-                            value={field.value || ''}
-                          >
-                            <MenuItem value="">
-                              <em>Nessuno</em>
+                          label="Categoria Genitore (opzionale)"
+                          disabled={isParentsLoading}
+                          value={field.value || ''}
+                        >
+                          <MenuItem value="">
+                            <em>Nessun Genitore (Tipologia Principale)</em>
+                          </MenuItem>
+                          {parentOptions.map((option) => (
+                            <MenuItem key={option.id} value={option.id}>
+                              {option.name} ({option.code})
                             </MenuItem>
-                            {PREDEFINED_REFERENCES.map((ref) => (
-                              <MenuItem key={ref} value={ref}>
-                                {ref}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        )}
+                          ))}
+                        </Select>
+                      </FormControl>
+                    )}
+                  />
+                  {isParentsLoading && <Typography variant="caption" sx={{ ml: 1, color: 'text.secondary' }}>Caricamento genitori...</Typography>}
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Controller
+                    name="sortOrder"
+                    control={control}
+                    rules={{
+                      min: { value: 0, message: 'L\'ordine deve essere 0 o superiore' },
+                    }}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Ordine di Visualizzazione"
+                        type="number"
+                        fullWidth
+                        error={!!errors.sortOrder}
+                        helperText={errors.sortOrder?.message}
+                        InputLabelProps={{
+                          shrink: true,
+                        }}
+                        inputProps={{
+                          min: 0,
+                        }}
                       />
-                    </FormControl>
-                  </Grid>
+                    )}
+                  />
+                </Grid>
 
-                  {/* Ordine di Visualizzazione */}
-                  <Grid item xs={12} sm={6} md={3}>
+                {/* Colore e Stato */}
+                <Grid item xs={12} sm={6}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <Controller
-                      name="sortOrder"
+                      name="color"
                       control={control}
                       render={({ field }) => (
                         <TextField
                           {...field}
-                          fullWidth
-                          label="Ordine"
-                          type="number"
-                          inputProps={{ min: 0, max: 999 }}
-                          helperText="Ordine di visualizzazione"
-                          onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                          label="Colore"
+                          type="color"
+                          sx={{ width: 100 }}
+                          InputLabelProps={{
+                            shrink: true,
+                          }}
                         />
                       )}
                     />
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Aspetto e Gerarchia */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Palette />
-                  Aspetto e Gerarchia
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                <Grid container spacing={2}>
-                  {/* Colore */}
-                  <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth>
-                      <InputLabel id="color-label">Colore</InputLabel>
-                      <Controller
-                        name="color"
-                        control={control}
-                        render={({ field }) => (
-                          <Select
-                            {...field}
-                            labelId="color-label"
-                            label="Colore"
-                            renderValue={(value) => (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Box
-                                  sx={{
-                                    width: 20,
-                                    height: 20,
-                                    borderRadius: '50%',
-                                    backgroundColor: value,
-                                    border: '1px solid #ccc'
-                                  }}
-                                />
-                                {PREDEFINED_COLORS.find(c => c.value === value)?.name || value}
-                              </Box>
-                            )}
-                          >
-                            {PREDEFINED_COLORS.map((color) => (
-                              <MenuItem key={color.value} value={color.value}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Box
-                                    sx={{
-                                      width: 20,
-                                      height: 20,
-                                      borderRadius: '50%',
-                                      backgroundColor: color.value,
-                                      border: '1px solid #ccc'
-                                    }}
-                                  />
-                                  {color.name}
-                                </Box>
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        )}
-                      />
-                    </FormControl>
-                  </Grid>
-
-                  {/* Preview Colore */}
-                  <Grid item xs={12} sm={6}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, height: '100%' }}>
-                      <Typography variant="body2">Anteprima:</Typography>
+                    <Box sx={{ flexGrow: 1 }}>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Anteprima Colore:
+                      </Typography>
                       <Box
                         sx={{
                           width: 40,
                           height: 40,
-                          borderRadius: 2,
-                          backgroundColor: selectedColor,
-                          border: '2px solid #ccc',
-                          boxShadow: 1
+                          backgroundColor: watchColor || selectedColor,
+                          borderRadius: '50%',
+                          border: '1px solid #ccc',
+                          boxShadow: 2,
                         }}
                       />
                     </Box>
-                  </Grid>
-
-                  {/* Tipologia Padre */}
-                  <Grid item xs={12}>
-                    <FormControl fullWidth>
-                      <InputLabel id="parent-material-type-label">Tipologia Padre (Categoria)</InputLabel>
-                      <Controller
-                        name="parentId"
-                        control={control}
-                        render={({ field }) => (
-                          <Select
-                            {...field}
-                            labelId="parent-material-type-label"
-                            label="Tipologia Padre (Categoria)"
-                            value={field.value || ''}
-                            disabled={isLoadingParentMaterialTypes}
-                          >
-                            <MenuItem value="">
-                              <em>Nessuna - Categoria Principale</em>
-                            </MenuItem>
-                            {parentMaterialTypes?.map((parent) => (
-                              <MenuItem key={parent.id} value={parent.id}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Box
-                                    sx={{
-                                      width: 12,
-                                      height: 12,
-                                      borderRadius: '50%',
-                                      backgroundColor: parent.color || '#666',
-                                    }}
-                                  />
-                                  {parent.name} ({parent.code})
-                                </Box>
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        )}
-                      />
-                    </FormControl>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          {/* Stato - Solo in modalità modifica */}
-          {isEditMode && (
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Stato
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Utilizza il selettore colori o inserisci un codice esadecimale (es. #FF5722).
                   </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  
+                </Grid>
+                <Grid item xs={12} sm={6}>
                   <Controller
                     name="isActive"
                     control={control}
@@ -770,74 +533,125 @@ const MaterialTypeForm: React.FC = () => {
                       <FormControlLabel
                         control={
                           <Switch
+                            {...field}
                             checked={field.value}
-                            onChange={field.onChange}
-                            color="primary"
+                            onChange={(e) => field.onChange(e.target.checked)}
                           />
                         }
-                        label={
-                          <Box>
-                            <Typography variant="body1">
-                              Tipologia Attiva
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {field.value 
-                                ? 'La tipologia è attiva e può essere utilizzata per i conferimenti'
-                                : 'La tipologia è disattivata e non sarà disponibile per nuovi conferimenti'
-                              }
-                            </Typography>
-                          </Box>
-                        }
+                        label="Tipologia Attiva"
+                        sx={{ mt: 1 }}
                       />
                     )}
                   />
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
+                </Grid>
+
+              </Grid>
+
+              {/* Messaggio di errore invio */}
+              {submitError && (
+                <Alert severity="error" sx={{ mt: 3 }}>
+                  {submitError}
+                </Alert>
+              )}
+
+              {/* Azioni del form */}
+              <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<Cancel />}
+                  onClick={handleCancel}
+                  disabled={createMutation.isLoading || updateMutation.isLoading}
+                >
+                  Annulla
+                </Button>
+
+                <Button
+                  type="submit"
+                  variant="contained"
+                  startIcon={<Save />}
+                  disabled={createMutation.isLoading || updateMutation.isLoading || !isValid}
+                  size="large"
+                >
+                  {createMutation.isLoading || updateMutation.isLoading
+                    ? (isEditMode ? 'Aggiornamento...' : 'Creazione...')
+                    : (isEditMode ? 'Aggiorna Tipologia' : 'Crea Tipologia')
+                  }
+                </Button>
+              </Box>
+
+              {/* Debug Info in Development */}
+              {import.meta.env.DEV && (
+                <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+                  <Typography variant="caption" component="div">
+                    Debug Form State:<br/>
+                    Valid: {isValid.toString()}<br/>
+                    Dirty: {isDirty.toString()}<br/>
+                    Edit Mode: {isEditMode.toString()}<br/>
+                    Material Type ID: {id || 'N/A'}<br/>
+                    Submit Error: {submitError || 'None'}<br/>
+                    Selected Color: {selectedColor}<br/>
+                    Mutations Loading: {createMutation.isLoading || updateMutation.isLoading}
+                  </Typography>
+                </Box>
+              )}
+
+            </Box>
+          </Paper>
         </Grid>
 
-        {/* Buttons */}
-        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-          <Button
-            variant="outlined"
-            startIcon={<Cancel />}
-            onClick={handleCancel}
-            disabled={createMutation.isPending || updateMutation.isPending}
-          >
-            Annulla
-          </Button>
+        <Grid item xs={12} md={4}>
+          <Card elevation={2}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                <Info fontSize="small" sx={{ mr: 1 }} />
+                Informazioni Utili
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Le tipologie di materiali permettono di classificare i rifiuti e i materiali recuperabili. Possono essere organizzate in una struttura gerarchica (genitore/figlio).
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                <strong>Codice CER:</strong> Utilizzato per la classificazione standard dei rifiuti (Catalogo Europeo dei Rifiuti).
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                <strong>Ordine di Visualizzazione:</strong> Un numero basso (&lt; 100) garantisce che la tipologia appaia in cima alle liste ordinate per sortOrder.
+              </Typography>
+            </CardContent>
+          </Card>
 
-          <Button
-            type="submit"
-            variant="contained"
-            startIcon={<Save />}
-            disabled={createMutation.isPending || updateMutation.isPending || !isValid}
-            size="large"
-          >
-            {createMutation.isPending || updateMutation.isPending 
-              ? (isEditMode ? 'Aggiornamento...' : 'Creazione...') 
-              : (isEditMode ? 'Aggiorna Tipologia' : 'Crea Tipologia')
-            }
-          </Button>
-        </Box>
-
-        {/* Debug Info in Development */}
-        {process.env.NODE_ENV === 'development' && (
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-            <Typography variant="caption" component="div">
-              Debug Form State:<br/>
-              Valid: {isValid.toString()}<br/>
-              Dirty: {isDirty.toString()}<br/>
-              Edit Mode: {isEditMode.toString()}<br/>
-              Material Type ID: {id || 'N/A'}<br/>
-              Submit Error: {submitError || 'None'}<br/>
-              Selected Color: {selectedColor}<br/>
-              Mutations Pending: {createMutation.isPending || updateMutation.isPending}
-            </Typography>
-          </Box>
-        )}
-      </Box>
+          <Card elevation={2} sx={{ mt: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Colori Suggeriti
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Grid container spacing={1}>
+                {defaultColors.map((color, index) => (
+                  <Grid item key={index}>
+                    <Box
+                      sx={{
+                        width: 30,
+                        height: 30,
+                        backgroundColor: color,
+                        borderRadius: 1,
+                        cursor: 'pointer',
+                        border: selectedColor === color ? '2px solid #3f51b5' : '1px solid #ccc',
+                        transition: 'transform 0.1s',
+                        '&:hover': {
+                          transform: 'scale(1.1)',
+                        },
+                      }}
+                      onClick={() => {
+                        setSelectedColor(color);
+                      }}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
     </Container>
   );
 };

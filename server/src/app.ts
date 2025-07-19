@@ -1,4 +1,4 @@
-// server/src/app.ts - VERSIONE CORRETTA COMPLETA
+// server/src/app.ts - CORS FIX
 
 import express from 'express';
 import helmet from 'helmet';
@@ -17,14 +17,27 @@ const port = Number(process.env.PORT) || 4000;
 const apiPrefix = process.env.API_PREFIX || '/api';
 const host = process.env.HOST || '0.0.0.0';
 
-// Configurazione CORS più specifica per produzione
+// 🚨 FIX CORS: Configurazione più permissiva per sviluppo
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL || 'http://localhost:3000'
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:4001',
+    'http://127.0.0.1:4001',
+    'http://192.168.1.249:4001',  // 🚨 AGGIUNTO: IP specifico dal log
+    'http://192.168.1.249:3000',
+    // Permetti qualsiasi origin su localhost per sviluppo
+    /^http:\/\/localhost:\d+$/,
+    /^http:\/\/127\.0\.0\.1:\d+$/,
+    /^http:\/\/192\.168\.\d+\.\d+:\d+$/  // 🚨 AGGIUNTO: Qualsiasi IP locale
+  ],
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
+
+console.log('🔧 CORS configured for origins:', corsOptions.origin);
 
 // Middleware di sicurezza
 app.use(helmet({
@@ -32,7 +45,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 
-// CORS
+// 🚨 CORS - Applicato PRIMA di tutto
 app.use(cors(corsOptions));
 
 // Parsing del body
@@ -72,12 +85,13 @@ app.get('/api/status', async (req, res) => {
     res.status(200).json({
       status: 'OK',
       database: 'Connected',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      cors: 'Enabled',
+      origin: req.headers.origin || 'No origin header'
     });
-  } catch (error: unknown) {  // ✅ FIX: Tipo esplicito per error
+  } catch (error: unknown) {
     console.error('Database connection error:', error);
     
-    // ✅ FIX: Gestione sicura del tipo di errore
     const errorMessage = error instanceof Error ? error.message : 'Database connection failed';
     
     res.status(503).json({
@@ -138,6 +152,7 @@ if (process.env.NODE_ENV !== 'test') {
   
   const server = app.listen(port, host, () => {
     logNetworkInfo(port, apiPrefix);
+    console.log('🌐 CORS enabled for development - all local origins allowed');
   });
 
   // Timeout per le richieste (30 secondi)

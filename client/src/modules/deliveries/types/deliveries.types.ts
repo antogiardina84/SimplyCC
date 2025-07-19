@@ -93,7 +93,7 @@ export interface CreateMaterialTypeData {
   reference?: string;
   color?: string;
   sortOrder?: number;
-  parentId?: string;
+  parentId?: string | null; // Corretto per accettare null
 }
 
 export interface UpdateMaterialTypeData extends Partial<CreateMaterialTypeData> {

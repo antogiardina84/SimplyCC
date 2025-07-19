@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/services/materialTypes.api.ts - ENDPOINTS CORRETTI
+// client/src/modules/deliveries/services/materialTypes.api.ts - FIXED SYNTAX ERRORS
 
 import api from '../../../core/services/api';
 import type {

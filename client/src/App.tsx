@@ -1,4 +1,4 @@
-// client/src/App.tsx - VERSIONE CORRETTA CON PERCORSI GIUSTI
+// client/src/App.tsx - VERSIONE CORRETTA CON FUTURE FLAGS v7
 
 import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
@@ -46,7 +46,12 @@ const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <BrowserRouter>
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        >
           <AuthProvider>
             <MainLayout>
               <AppRoutes />

@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/components/DayDetailModal.tsx - FIXED
+// client/src/modules/deliveries/components/DayDetailModal.tsx - VERSIONE CORRETTA
 
 import React, { useState } from 'react';
 import {
@@ -28,7 +28,6 @@ import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { deliveriesApi } from '../services/deliveries.api';
-// RIMOSSO: import FastDeliveryInput from './FastDeliveryInput'; // Componente troppo complesso per ora
 import type { MaterialType, Delivery } from '../types/deliveries.types';
 
 interface DayDetailModalProps {
@@ -38,7 +37,7 @@ interface DayDetailModalProps {
   materialTypes: MaterialType[];
 }
 
-// AGGIUNTO: Modal semplificato per inserimento rapido
+// Modal semplificato per inserimento rapido
 const SimpleDeliveryForm: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -47,8 +46,39 @@ const SimpleDeliveryForm: React.FC<{
 }> = ({ open, onClose, date, materialType }) => {
   const [weight, setWeight] = useState('');
   const [contributorName, setContributorName] = useState('');
-  const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
+
+  // 🔧 CORREZIONE: Mutation per creazione conferimento con contributorName
+  const createDeliveryMutation = useMutation({
+    mutationFn: (data: any) => deliveriesApi.create(data),
+    onSuccess: () => {
+      console.log('✅ Conferimento creato con successo!');
+      
+      // Invalida le query per aggiornare DayDetailModal e il calendario
+      queryClient.invalidateQueries({ queryKey: ['deliveries', date] });
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      
+      alert('Conferimento salvato con successo!');
+      
+      // Reset form e chiudi modal
+      setWeight('');
+      setContributorName('');
+      onClose();
+    },
+    onError: (error: any) => {
+      console.error('❌ Errore nel salvataggio del conferimento:', error);
+      
+      // Gestione errori più dettagliata
+      let errorMessage = 'Errore sconosciuto';
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(`Errore nel salvataggio del conferimento: ${errorMessage}`);
+    },
+  });
 
   const handleSave = async () => {
     if (!weight || !contributorName) {
@@ -56,33 +86,22 @@ const SimpleDeliveryForm: React.FC<{
       return;
     }
 
-    setSaving(true);
-    try {
-      // Per ora simuliamo il salvataggio - in futuro andrà implementato con API reali
-      console.log('💾 Salvando conferimento:', {
-        date,
-        materialType: materialType.name,
-        weight: parseFloat(weight),
-        contributorName
-      });
-      
-      // Simula chiamata API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Aggiorna le query del calendario
-      queryClient.invalidateQueries({ queryKey: ['calendar'] });
-      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
-      
-      alert('Conferimento salvato con successo!');
-      onClose();
-      
-    } catch (error) {
-      console.error('Errore nel salvataggio:', error);
-      alert('Errore nel salvataggio del conferimento');
-    } finally {
-      setSaving(false);
-    }
+    // 🔧 CORREZIONE PRINCIPALE: Invia contributorName invece di contributorId
+    const dataToSubmit = {
+      date: date,
+      materialTypeId: materialType.id,
+      weight: parseFloat(weight),
+      contributorName: contributorName.trim(), // ✅ Usa contributorName
+      unit: materialType.unit
+    };
+
+    console.log('Attempting to save delivery:', dataToSubmit);
+
+    // Esegui la mutation per salvare il conferimento tramite API
+    createDeliveryMutation.mutate(dataToSubmit);
   };
+
+  const saving = createDeliveryMutation.isLoading;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -106,12 +125,14 @@ const SimpleDeliveryForm: React.FC<{
                 value={contributorName}
                 onChange={(e) => setContributorName(e.target.value)}
                 placeholder="Es: Eco Service SRL"
+                disabled={saving}
                 style={{
                   width: '100%',
                   padding: '12px',
                   border: '1px solid #ccc',
                   borderRadius: '4px',
-                  fontSize: '16px'
+                  fontSize: '16px',
+                  backgroundColor: saving ? '#f5f5f5' : 'white'
                 }}
               />
             </Box>
@@ -127,12 +148,14 @@ const SimpleDeliveryForm: React.FC<{
                 placeholder="Es: 150.5"
                 step="0.1"
                 min="0"
+                disabled={saving}
                 style={{
                   width: '100%',
                   padding: '12px',
                   border: '1px solid #ccc',
                   borderRadius: '4px',
-                  fontSize: '16px'
+                  fontSize: '16px',
+                  backgroundColor: saving ? '#f5f5f5' : 'white'
                 }}
               />
             </Box>
@@ -339,7 +362,7 @@ const DayDetailModal: React.FC<DayDetailModalProps> = ({
                                       size="small"
                                       color="primary"
                                       onClick={() => handleValidateDelivery(delivery.id)}
-                                      disabled={validateMutation.isPending}
+                                      disabled={validateMutation.isLoading}
                                     >
                                       <CheckCircle fontSize="small" />
                                     </IconButton>
@@ -351,7 +374,7 @@ const DayDetailModal: React.FC<DayDetailModalProps> = ({
                                       size="small"
                                       color="error"
                                       onClick={() => handleDeleteDelivery(delivery.id, delivery.contributor.name)}
-                                      disabled={deleteMutation.isPending}
+                                      disabled={deleteMutation.isLoading}
                                     >
                                       <Delete fontSize="small" />
                                     </IconButton>

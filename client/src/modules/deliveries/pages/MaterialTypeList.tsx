@@ -1,4 +1,4 @@
-// client/src/modules/deliveries/pages/MaterialTypesList.tsx - VERSIONE PULITA
+// client/src/modules/deliveries/pages/MaterialTypesList.tsx - VERSIONE CORRETTA COMPLETA
 
 import React, { useState } from 'react';
 import {
@@ -37,10 +37,10 @@ import {
   Refresh,
   BugReport,
   CheckCircle,
-  ErrorOutline
+  // ErrorOutline rimosso in quanto non utilizzato
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { materialTypesApi } from '../services/materialTypes.api';
 
 // ===============================
@@ -325,7 +325,7 @@ const MaterialTypesList: React.FC = () => {
           </Typography>
           <Typography variant="body2" component="div" sx={{ fontFamily: 'monospace' }}>
             URL Frontend: {window.location.href}<br/>
-            Backend URL: {process.env.REACT_APP_API_URL || 'http://localhost:4000'}<br/>
+            Backend URL: {import.meta.env.VITE_API_URL || 'http://localhost:4000'}<br/>
             Error Type: {error instanceof Error ? error.constructor.name : 'Unknown'}<br/>
             Error Details: {JSON.stringify(error, null, 2)}
           </Typography>
@@ -525,7 +525,6 @@ const MaterialTypesList: React.FC = () => {
                   <Box sx={{ textAlign: 'center' }}>
                     {allTypes?.length === 0 ? (
                       <>
-                        <ErrorOutline sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
                         <Typography variant="h6" color="text.secondary" gutterBottom>
                           Nessuna tipologia materiale presente
                         </Typography>
@@ -653,7 +652,7 @@ const MaterialTypesList: React.FC = () => {
                           size="small"
                           color="error"
                           onClick={() => handleDelete(type.id, type.name)}
-                          disabled={deleteMutation.isPending}
+                          disabled={deleteMutation.isLoading}
                         >
                           <Delete fontSize="small" />
                         </IconButton>
@@ -680,7 +679,7 @@ const MaterialTypesList: React.FC = () => {
             <Typography variant="subtitle2" gutterBottom>Sistema:</Typography>
             <Box sx={{ mb: 2, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
               URL Corrente: {window.location.href}<br/>
-              Backend URL: {process.env.REACT_APP_API_URL || 'http://localhost:4000'}<br/>
+              Backend URL: {import.meta.env.VITE_API_URL || 'http://localhost:4000'}<br/>
               Navigate Function: {typeof navigate}<br/>
               Material Types Loaded: {allTypes?.length || 0}<br/>
               Loading State: {isLoading.toString()}<br/>
@@ -709,8 +708,8 @@ const MaterialTypesList: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleTestConnection} disabled={testMutation.isPending}>
-            {testMutation.isPending ? 'Testing...' : 'Test API'}
+          <Button onClick={handleTestConnection} disabled={testMutation.isLoading}>
+            {testMutation.isLoading ? 'Testing...' : 'Test API'}
           </Button>
           <Button onClick={() => setShowDebugDialog(false)}>
             Chiudi
