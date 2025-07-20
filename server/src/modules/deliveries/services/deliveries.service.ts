@@ -138,7 +138,7 @@ export const createDelivery = async (data: CreateDeliveryData) => {
   try {
     let contributorId = data.contributorId;
     
-    // ✅ GESTIONE AUTOMATICA CONFERITORE
+    // ✅ GESTIONE AUTOMATICA CONFERITORE MIGLIORATA
     // Se viene passato contributorName invece di contributorId, crea o trova il conferitore
     if (!contributorId && data.contributorName) {
       console.log('🔍 Ricerca conferitore per nome:', data.contributorName);
@@ -157,17 +157,38 @@ export const createDelivery = async (data: CreateDeliveryData) => {
       if (!existingContributor) {
         console.log('➕ Creazione nuovo conferitore:', data.contributorName);
         
-        existingContributor = await prisma.contributor.create({
-          data: {
-            name: data.contributorName.trim(),
-            isActive: true,
-            authorizedMaterialTypes: JSON.stringify([]), // Array vuoto per ora - sarà autorizzato per tutti
-            createdAt: new Date(),
-            updatedAt: new Date()
+        try {
+          existingContributor = await prisma.contributor.create({
+            data: {
+              name: data.contributorName.trim(),
+              isActive: true,
+              authorizedMaterialTypes: JSON.stringify([]), // Array vuoto per ora - sarà autorizzato per tutti
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }
+          });
+          
+          console.log('✅ Conferitore creato con ID:', existingContributor.id);
+        } catch (createError: any) {
+          console.error('❌ Errore nella creazione del conferitore:', createError);
+          
+          // Se la creazione fallisce per duplicati, prova a cercarlo di nuovo
+          // (potrebbe essere stato creato da un'altra richiesta simultanea)
+          existingContributor = await prisma.contributor.findFirst({
+            where: {
+              name: {
+                equals: data.contributorName.trim(),
+                mode: 'insensitive'
+              }
+            }
+          });
+          
+          if (!existingContributor) {
+            throw new HttpException(500, `Impossibile creare o trovare il conferitore: ${createError.message}`);
           }
-        });
-        
-        console.log('✅ Conferitore creato con ID:', existingContributor.id);
+          
+          console.log('✅ Conferitore trovato dopo retry con ID:', existingContributor.id);
+        }
       } else {
         console.log('✅ Conferitore esistente trovato con ID:', existingContributor.id);
       }
@@ -206,8 +227,8 @@ export const createDelivery = async (data: CreateDeliveryData) => {
       // throw new HttpException(400, `Il conferitore non è autorizzato per la tipologia ${materialType.name}`);
     }
     
-    // ✅ SEMPLIFICAZIONE: Per ora permettiamo duplicati (si può gestire dopo)
-    // Verifica duplicati (stesso giorno, conferitore, materiale)
+    // ✅ GESTIONE INTELLIGENTE DEI DUPLICATI
+    // Invece di creare un duplicato, aggiorna quello esistente sommando i pesi
     const existingDelivery = await prisma.delivery.findFirst({
       where: {
         date: {
@@ -220,11 +241,50 @@ export const createDelivery = async (data: CreateDeliveryData) => {
     });
 
     if (existingDelivery) {
-      console.log('⚠️ Conferimento duplicato trovato, ma procediamo comunque');
-      // throw new HttpException(400, 'Esiste già un conferimento per questo conferitore e tipologia nella data selezionata');
+      console.log('🔄 Conferimento duplicato trovato - Aggiornamento con peso aggregato:', {
+        existingWeight: existingDelivery.weight,
+        newWeight: data.weight,
+        totalWeight: existingDelivery.weight + data.weight
+      });
+      
+      // Aggiorna il peso del conferimento esistente sommando il nuovo peso
+      const updatedDelivery = await prisma.delivery.update({
+        where: { id: existingDelivery.id },
+        data: {
+          weight: existingDelivery.weight + data.weight,
+          notes: existingDelivery.notes 
+            ? `${existingDelivery.notes} | Peso aggregato: +${data.weight}${data.unit || materialType.unit}`
+            : `Peso aggregato: +${data.weight}${data.unit || materialType.unit}`,
+          updatedAt: new Date()
+        },
+        include: {
+          contributor: {
+            include: {
+              basin: true
+            }
+          },
+          materialType: {
+            include: {
+              parent: true
+            }
+          },
+          basin: true
+        }
+      });
+
+      console.log('✅ Conferimento aggiornato con peso aggregato:', updatedDelivery.id);
+      return updatedDelivery;
     }
 
     // Crea il conferimento
+    console.log('📝 Creazione conferimento con dati finali:', {
+      date: new Date(data.date),
+      contributorId,
+      materialTypeId: data.materialTypeId,
+      weight: data.weight,
+      unit: data.unit || materialType.unit
+    });
+
     const delivery = await prisma.delivery.create({
       data: {
         date: new Date(data.date),
