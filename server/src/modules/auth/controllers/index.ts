@@ -2,7 +2,9 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { HttpException } from '../../../core/middleware/error.middleware';
+import { AuthRequest } from '../../../core/middleware/auth.middleware';
 import * as authService from '../services/auth.service';
+import * as userService from '../../users/services/users.service';
 import { logger } from '../../../core/config/logger';
 
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -34,6 +36,20 @@ export const register = async (req: Request, res: Response, next: NextFunction):
     
     logger.info(`Nuovo utente registrato: ${email}`);
     res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getCurrentUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new HttpException(401, 'Utente non autenticato');
+    }
+
+    const user = await userService.findUserById(userId);
+    res.status(200).json(user);
   } catch (error) {
     next(error);
   }

@@ -41,6 +41,11 @@ export const register = async (data: RegisterData): Promise<AuthResponse> => {
   return response.data;
 };
 
+export const getCurrentUserFromServer = async () => {
+  const response = await api.get('/auth/me');
+  return response.data;
+};
+
 export const logout = (): void => {
   localStorage.removeItem('token');
   localStorage.removeItem('user');

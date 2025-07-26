@@ -1,4 +1,4 @@
-// client/src/core/layout/ResponsiveNavbar.tsx - VERSIONE CORRETTA COMPLETA
+// client/src/app/layout/ResponsiveNavbar.tsx - VERSIONE CORRETTA COMPLETA
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -22,7 +22,8 @@ import {
   ListItemButton,
   Collapse,
   SwipeableDrawer,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import {
   Logout,
@@ -52,7 +53,6 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import * as authService from '../../modules/auth/services/authService';
-import api from '../../core/services/api';
 
 interface ResponsiveNavbarProps {
   onToggleSidebar?: () => void;
@@ -74,7 +74,7 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   
-  // ✅ CORREZIONE: Stati per gestione utente corrente
+  // Stati per gestione utente corrente
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [userLoading, setUserLoading] = useState(true);
   const [userError, setUserError] = useState<string | null>(null);
@@ -93,7 +93,7 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
 
   const token = localStorage.getItem('token');
 
-  // ✅ CORREZIONE PRINCIPALE: Carica i dati dell'utente corrente dal server
+  // Carica i dati dell'utente corrente
   useEffect(() => {
     const loadCurrentUser = async () => {
       if (!token) {
@@ -123,56 +123,57 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
         }
 
         // Aggiorna sempre dal server per avere dati freschi
-        const response = await api.get('/auth/me');
-        const serverUser = response.data;
-        
-        const formattedServerUser: CurrentUser = {
-          id: serverUser.id,
-          name: serverUser.name || `${serverUser.firstName || ''} ${serverUser.lastName || ''}`.trim() || serverUser.email,
-          email: serverUser.email,
-          role: serverUser.role,
-          firstName: serverUser.firstName,
-          lastName: serverUser.lastName,
-          avatar: serverUser.avatar
-        };
+        try {
+          const serverUser = await authService.getCurrentUserFromServer();
+          
+          const formattedServerUser: CurrentUser = {
+            id: serverUser.id,
+            name: serverUser.name || `${serverUser.firstName || ''} ${serverUser.lastName || ''}`.trim() || serverUser.email,
+            email: serverUser.email,
+            role: serverUser.role,
+            firstName: serverUser.firstName,
+            lastName: serverUser.lastName,
+            avatar: serverUser.avatar
+          };
 
-        setCurrentUser(formattedServerUser);
-        
-        // Aggiorna anche il localStorage con i dati freschi
-        localStorage.setItem('user', JSON.stringify(serverUser));
-        
-        console.log('✅ Dati utente caricati:', {
-          id: formattedServerUser.id,
-          name: formattedServerUser.name,
-          email: formattedServerUser.email,
-          role: formattedServerUser.role
-        });
+          setCurrentUser(formattedServerUser);
+          
+          // Aggiorna anche il localStorage con i dati freschi
+          localStorage.setItem('user', JSON.stringify(serverUser));
+          
+          console.log('✅ Dati utente caricati dal server:', {
+            id: formattedServerUser.id,
+            name: formattedServerUser.name,
+            email: formattedServerUser.email,
+            role: formattedServerUser.role
+          });
+        } catch (serverError: any) {
+          console.log('⚠️ Fallback al localStorage per dati utente');
+          
+          // Se errore 401, probabilmente token scaduto
+          if (serverError.response?.status === 401) {
+            console.log('🚪 Token scaduto, redirect al login');
+            authService.logout();
+            navigate('/login');
+            return;
+          }
+          
+          // Per altri errori, continua con i dati locali se disponibili
+          if (!localUser) {
+            throw serverError;
+          }
+        }
         
       } catch (error: any) {
         console.error('❌ Errore nel caricamento dati utente:', error);
         setUserError('Errore nel caricamento profilo utente');
         
-        // Se errore 401, probabilmente token scaduto
-        if (error.response?.status === 401) {
-          console.log('🚪 Token scaduto, redirect al login');
+        // Se nessun dato locale disponibile, redirect al login
+        const localUser = authService.getCurrentUser();
+        if (!localUser) {
+          console.log('🚪 Nessun dato utente disponibile, redirect al login');
           authService.logout();
           navigate('/login');
-          return;
-        }
-        
-        // Fallback ai dati locali se presenti
-        const localUser = authService.getCurrentUser();
-        if (localUser) {
-          const formattedUser: CurrentUser = {
-            id: localUser.id,
-            name: localUser.name || `${localUser.firstName || ''} ${localUser.lastName || ''}`.trim() || localUser.email,
-            email: localUser.email,
-            role: localUser.role,
-            firstName: localUser.firstName,
-            lastName: localUser.lastName
-          };
-          setCurrentUser(formattedUser);
-          console.log('🔄 Utilizzando dati utente dal localStorage come fallback');
         }
       } finally {
         setUserLoading(false);
@@ -208,7 +209,7 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
     setMobileMenuOpen(false);
   };
 
-  // ✅ CORREZIONE: Logout con pulizia completa
+  // Logout con pulizia completa
   const handleLogout = () => {
     console.log('🚪 Logout utente...');
     authService.logout();
@@ -231,7 +232,7 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
     );
   };
 
-  // ✅ CORREZIONE: Funzione per ottenere iniziali utente
+  // Funzione per ottenere iniziali utente
   const getUserInitials = (user: CurrentUser | null): string => {
     if (!user) return '?';
     
@@ -789,7 +790,7 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
 
         {/* Area Utente */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
-          {/* ✅ CORREZIONE: Error indicator se errore nel caricamento utente */}
+          {/* Error indicator se errore nel caricamento utente */}
           {userError && !isMobile && (
             <Alert severity="warning" sx={{ py: 0, px: 1 }}>
               Errore profilo utente
@@ -1067,7 +1068,7 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
         </MenuItem>
       </Menu>
 
-      {/* ✅ CORREZIONE: Menu Profilo Utente CORRETTO */}
+      {/* Menu Profilo Utente */}
       <Menu
         anchorEl={userProfileAnchor}
         open={Boolean(userProfileAnchor)}
@@ -1108,10 +1109,9 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
           </Box>
         )}
         
-        {/* ✅ CORREZIONE CRITICA: Navigazione corretta al profilo */}
         <MenuItem onClick={() => { 
           handleMenuClose(setUserProfileAnchor); 
-          navigate('/profile'); // ✅ DEVE andare a /profile
+          navigate('/profile'); 
         }}>
           <ListItemIcon><Person fontSize="small" /></ListItemIcon>
           <ListItemText primary="Il mio profilo" />
