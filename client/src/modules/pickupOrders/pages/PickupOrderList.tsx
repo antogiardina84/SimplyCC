@@ -498,7 +498,7 @@ const PickupOrderList = () => {
                   <TableRow>
                     <TableCell><strong>Stato</strong></TableCell>
                     <TableCell><strong>Numero Buono</strong></TableCell>
-                    <TableCell><strong>Data Carico</strong></TableCell>
+                    <TableCell><strong>Data Scarico</strong></TableCell>
                     <TableCell><strong>Cliente</strong></TableCell>
                     <TableCell><strong>Mittente</strong></TableCell>
                     <TableCell><strong>Destinatario</strong></TableCell>
@@ -533,8 +533,8 @@ const PickupOrderList = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {order.loadingDate 
-                          ? format(new Date(order.loadingDate), 'dd/MM/yyyy', { locale: it })
+                        {order.unloadingDate 
+                          ? format(new Date(order.unloadingDate), 'dd/MM/yyyy', { locale: it })
                           : order.scheduledDate 
                             ? format(new Date(order.scheduledDate), 'dd/MM/yyyy', { locale: it })
                             : format(new Date(order.issueDate), 'dd/MM/yyyy', { locale: it })

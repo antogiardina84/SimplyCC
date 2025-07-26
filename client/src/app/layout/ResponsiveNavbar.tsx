@@ -1,6 +1,6 @@
 // client/src/core/layout/ResponsiveNavbar.tsx - VERSIONE CORRETTA COMPLETA
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -21,7 +21,8 @@ import {
   List,
   ListItemButton,
   Collapse,
-  SwipeableDrawer
+  SwipeableDrawer,
+  Alert
 } from '@mui/material';
 import {
   Logout,
@@ -50,9 +51,21 @@ import {
   Close
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import * as authService from '../../modules/auth/services/authService';
+import api from '../../core/services/api';
 
 interface ResponsiveNavbarProps {
   onToggleSidebar?: () => void;
+}
+
+interface CurrentUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
 }
 
 const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
@@ -60,6 +73,11 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
+  
+  // ✅ CORREZIONE: Stati per gestione utente corrente
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [userLoading, setUserLoading] = useState(true);
+  const [userError, setUserError] = useState<string | null>(null);
   
   // Stati per i menu dropdown (desktop)
   const [usersMenuAnchor, setUsersMenuAnchor] = useState<null | HTMLElement>(null);
@@ -73,15 +91,96 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMobile, setExpandedMobile] = useState<string[]>([]);
 
-  // Mock user data
-  const currentUser = {
-    name: 'Mario Rossi',
-    email: 'mario.rossi@example.com',
-    role: 'Manager',
-    avatar: null
-  };
-
   const token = localStorage.getItem('token');
+
+  // ✅ CORREZIONE PRINCIPALE: Carica i dati dell'utente corrente dal server
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      if (!token) {
+        setUserLoading(false);
+        return;
+      }
+
+      try {
+        setUserLoading(true);
+        setUserError(null);
+        
+        console.log('🔄 Caricamento dati utente corrente...');
+        
+        // Prova prima a ottenere dal localStorage
+        const localUser = authService.getCurrentUser();
+        if (localUser) {
+          const formattedUser: CurrentUser = {
+            id: localUser.id,
+            name: localUser.name || `${localUser.firstName || ''} ${localUser.lastName || ''}`.trim() || localUser.email,
+            email: localUser.email,
+            role: localUser.role,
+            firstName: localUser.firstName,
+            lastName: localUser.lastName,
+            avatar: localUser.avatar
+          };
+          setCurrentUser(formattedUser);
+        }
+
+        // Aggiorna sempre dal server per avere dati freschi
+        const response = await api.get('/auth/me');
+        const serverUser = response.data;
+        
+        const formattedServerUser: CurrentUser = {
+          id: serverUser.id,
+          name: serverUser.name || `${serverUser.firstName || ''} ${serverUser.lastName || ''}`.trim() || serverUser.email,
+          email: serverUser.email,
+          role: serverUser.role,
+          firstName: serverUser.firstName,
+          lastName: serverUser.lastName,
+          avatar: serverUser.avatar
+        };
+
+        setCurrentUser(formattedServerUser);
+        
+        // Aggiorna anche il localStorage con i dati freschi
+        localStorage.setItem('user', JSON.stringify(serverUser));
+        
+        console.log('✅ Dati utente caricati:', {
+          id: formattedServerUser.id,
+          name: formattedServerUser.name,
+          email: formattedServerUser.email,
+          role: formattedServerUser.role
+        });
+        
+      } catch (error: any) {
+        console.error('❌ Errore nel caricamento dati utente:', error);
+        setUserError('Errore nel caricamento profilo utente');
+        
+        // Se errore 401, probabilmente token scaduto
+        if (error.response?.status === 401) {
+          console.log('🚪 Token scaduto, redirect al login');
+          authService.logout();
+          navigate('/login');
+          return;
+        }
+        
+        // Fallback ai dati locali se presenti
+        const localUser = authService.getCurrentUser();
+        if (localUser) {
+          const formattedUser: CurrentUser = {
+            id: localUser.id,
+            name: localUser.name || `${localUser.firstName || ''} ${localUser.lastName || ''}`.trim() || localUser.email,
+            email: localUser.email,
+            role: localUser.role,
+            firstName: localUser.firstName,
+            lastName: localUser.lastName
+          };
+          setCurrentUser(formattedUser);
+          console.log('🔄 Utilizzando dati utente dal localStorage come fallback');
+        }
+      } finally {
+        setUserLoading(false);
+      }
+    };
+
+    loadCurrentUser();
+  }, [token, navigate]);
 
   // Helper per verificare se il path è attivo
   const isActivePath = (path: string) => {
@@ -109,8 +208,11 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
     setMobileMenuOpen(false);
   };
 
+  // ✅ CORREZIONE: Logout con pulizia completa
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    console.log('🚪 Logout utente...');
+    authService.logout();
+    setCurrentUser(null);
     setUserProfileAnchor(null);
     setMobileMenuOpen(false);
     navigate('/login');
@@ -127,6 +229,26 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
         ? prev.filter(item => item !== section)
         : [...prev, section]
     );
+  };
+
+  // ✅ CORREZIONE: Funzione per ottenere iniziali utente
+  const getUserInitials = (user: CurrentUser | null): string => {
+    if (!user) return '?';
+    
+    if (user.firstName && user.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+    }
+    
+    if (user.name && user.name !== user.email) {
+      const parts = user.name.split(' ').filter(part => part.length > 0);
+      if (parts.length >= 2) {
+        return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+      } else if (parts.length === 1) {
+        return parts[0].substring(0, 2).toUpperCase();
+      }
+    }
+    
+    return user.email[0].toUpperCase();
   };
 
   // Style per i bottoni del menu principale
@@ -471,28 +593,30 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
         <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.12)' }} />
         
         {/* User Profile nel mobile menu */}
-        <Box sx={{ px: 2, py: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.05)' }}>
-            <Avatar 
-              sx={{ 
-                width: 32, 
-                height: 32, 
-                bgcolor: theme.palette.primary.main,
-                fontSize: '0.9rem'
-              }}
-            >
-              {currentUser.name.split(' ').map(n => n[0]).join('')}
-            </Avatar>
-            <Box sx={{ flexGrow: 1 }}>
-              <Typography variant="body2" sx={{ color: 'white', fontWeight: 500, lineHeight: 1.2 }}>
-                {currentUser.name}
-              </Typography>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                {currentUser.role}
-              </Typography>
+        {currentUser && (
+          <Box sx={{ px: 2, py: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.05)' }}>
+              <Avatar 
+                sx={{ 
+                  width: 32, 
+                  height: 32, 
+                  bgcolor: theme.palette.primary.main,
+                  fontSize: '0.9rem'
+                }}
+              >
+                {getUserInitials(currentUser)}
+              </Avatar>
+              <Box sx={{ flexGrow: 1 }}>
+                <Typography variant="body2" sx={{ color: 'white', fontWeight: 500, lineHeight: 1.2 }}>
+                  {currentUser.name}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                  {currentUser.role}
+                </Typography>
+              </Box>
             </Box>
           </Box>
-        </Box>
+        )}
 
         <ListItemButton
           onClick={() => { handleNavigation('/profile'); }}
@@ -665,7 +789,14 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
 
         {/* Area Utente */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
-          {token ? (
+          {/* ✅ CORREZIONE: Error indicator se errore nel caricamento utente */}
+          {userError && !isMobile && (
+            <Alert severity="warning" sx={{ py: 0, px: 1 }}>
+              Errore profilo utente
+            </Alert>
+          )}
+
+          {token && currentUser ? (
             <>
               {/* Notifiche - Solo desktop */}
               {!isMobile && (
@@ -702,6 +833,7 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
                     padding: '8px 12px',
                     borderRadius: 2,
                     transition: 'all 0.2s',
+                    opacity: userLoading ? 0.7 : 1,
                     '&:hover': {
                       backgroundColor: alpha(theme.palette.common.white, 0.1),
                     }
@@ -717,14 +849,14 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
                       fontWeight: 600
                     }}
                   >
-                    {currentUser.name.split(' ').map(n => n[0]).join('')}
+                    {getUserInitials(currentUser)}
                   </Avatar>
                   <Box>
                     <Typography variant="body2" sx={{ color: 'white', fontWeight: 500, lineHeight: 1.2 }}>
-                      {currentUser.name}
+                      {userLoading ? 'Caricamento...' : currentUser.name}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1 }}>
-                      {currentUser.role}
+                      {userLoading ? '...' : currentUser.role}
                     </Typography>
                   </Box>
                   <KeyboardArrowDown sx={{ color: 'white', fontSize: '1.2rem' }} />
@@ -739,10 +871,11 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
                     height: 36, 
                     bgcolor: theme.palette.primary.main,
                     fontSize: '1rem',
-                    fontWeight: 600
+                    fontWeight: 600,
+                    opacity: userLoading ? 0.7 : 1
                   }}
                 >
-                  {currentUser.name.split(' ').map(n => n[0]).join('')}
+                  {getUserInitials(currentUser)}
                 </Avatar>
               )}
             </>
@@ -934,7 +1067,7 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
         </MenuItem>
       </Menu>
 
-      {/* Menu Profilo Utente */}
+      {/* ✅ CORREZIONE: Menu Profilo Utente CORRETTO */}
       <Menu
         anchorEl={userProfileAnchor}
         open={Boolean(userProfileAnchor)}
@@ -956,24 +1089,30 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
           }
         }}
       >
-        <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-            {currentUser.name}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {currentUser.email}
-          </Typography>
-          <Box sx={{ mt: 0.5 }}>
-            <Chip 
-              label={currentUser.role} 
-              size="small" 
-              color="primary" 
-              variant="outlined"
-            />
+        {currentUser && (
+          <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              {currentUser.name}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {currentUser.email}
+            </Typography>
+            <Box sx={{ mt: 0.5 }}>
+              <Chip 
+                label={currentUser.role} 
+                size="small" 
+                color="primary" 
+                variant="outlined"
+              />
+            </Box>
           </Box>
-        </Box>
+        )}
         
-        <MenuItem onClick={() => { handleMenuClose(setUserProfileAnchor); navigate('/profile'); }}>
+        {/* ✅ CORREZIONE CRITICA: Navigazione corretta al profilo */}
+        <MenuItem onClick={() => { 
+          handleMenuClose(setUserProfileAnchor); 
+          navigate('/profile'); // ✅ DEVE andare a /profile
+        }}>
           <ListItemIcon><Person fontSize="small" /></ListItemIcon>
           <ListItemText primary="Il mio profilo" />
         </MenuItem>

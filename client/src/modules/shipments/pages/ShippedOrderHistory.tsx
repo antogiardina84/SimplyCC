@@ -19,10 +19,6 @@ import {
   IconButton,
   Alert,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Tooltip,
   CircularProgress,
   Pagination
@@ -41,41 +37,49 @@ import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import api from '../../../core/services/api';
 
-// ✅ INTERFACCIA CORRETTA - Allineata con lo schema del database
+// ✅ CORREZIONE: Interfaccia semplificata allineata alla struttura reale dell'API
 interface ShippedOrder {
   id: string;
   orderNumber: string;
   status: string;
-  // Relazione con PickupOrder (nested object)
-  pickupOrder?: {
-    issueDate: string;
-    scheduledDate?: string;
-    loadingDate?: string;
-    unloadingDate?: string;
-    completionDate?: string;
-    departureWeight?: number;
-    arrivalWeight?: number;
-    loadedPackages?: number;
-    expectedQuantity?: number;
-    basin: {
-      code: string;
-      client: {
-        name: string;
-      };
-    };
-    logisticSender?: {
+  issueDate: string;
+  scheduledDate?: string;
+  loadingDate?: string;
+  unloadingDate?: string;
+  completionDate?: string;
+  departureWeight?: number;
+  arrivalWeight?: number;
+  loadedPackages?: number;
+  expectedQuantity?: number;
+  actualQuantity?: number;
+  destinationQuantity?: number;
+  isRejected?: boolean;
+  rejectionReason?: string;
+  rejectionDate?: string;
+  basin?: {
+    code: string;
+    description?: string;
+    client?: {
       name: string;
     };
-    logisticRecipient?: {
-      name: string;
-    };
-    assignedOperator?: {
-      firstName: string;
-      lastName: string;
-    };
-    isRejected?: boolean;
-    rejectionReason?: string;
   };
+  logisticSender?: {
+    name: string;
+  };
+  logisticRecipient?: {
+    name: string;
+  };
+  logisticTransporter?: {
+    name: string;
+  };
+  assignedOperator?: {
+    firstName: string;
+    lastName: string;
+  };
+  client?: {
+    name: string;
+  };
+  [key: string]: any;
 }
 
 interface FilterState {
@@ -105,7 +109,7 @@ const ShippedOrderHistory = () => {
     searchTerm: ''
   });
 
-  // Carica i dati
+  // ✅ CORREZIONE: Carica i dati con gestione migliorata
   const loadData = async () => {
     try {
       setLoading(true);
@@ -113,36 +117,49 @@ const ShippedOrderHistory = () => {
 
       console.log('📊 === CARICAMENTO STORICO SPEDIZIONI ===');
 
-      // ✅ CORREZIONE: Carica SOLO ordini COMPLETO per lo storico
+      // ✅ CORREZIONE: Query ottimizzata per ordini completati con include esplicito
       const [ordersResponse, clientsResponse] = await Promise.all([
         api.get('/pickup-orders', {
           params: {
-            status: 'COMPLETO', // ✅ SOLO ordini COMPLETI nello storico
-            include: 'basin,logisticSender,logisticRecipient,assignedOperator'
+            status: 'COMPLETO',
+            include: 'basin,basin.client,logisticSender,logisticRecipient,assignedOperator,client',
+            limit: 200 // Aumenta il limite per avere più dati
           }
         }),
-        api.get('/clients')
+        api.get('/clients').catch(() => ({ data: [] })) // Fallback se endpoint non disponibile
       ]);
 
       const ordersData = ordersResponse.data || [];
       
-      console.log(`📦 Ordini COMPLETI caricati: ${ordersData.length}`);
-      
-      // Filtra ulteriormente per sicurezza e log
+      console.log(`📦 Ordini COMPLETI ricevuti dal server: ${ordersData.length}`);
+      console.log('📋 Struttura primo ordine:', ordersData[0] || 'Nessun ordine');
+
+      // ✅ CORREZIONE: Filtra e valida ordini con logging dettagliato
       const completedOrders = ordersData.filter((order: ShippedOrder) => {
-        const isCompleted = order.status === 'COMPLETO';
+        const isCompleted = order.status === 'COMPLETO' || order.completionDate;
+        
         if (isCompleted) {
-          console.log(`✅ Ordine completato: ${order.orderNumber} (${order.status})`);
+          console.log(`✅ Ordine valido: ${order.orderNumber}`, {
+            status: order.status,
+            completionDate: order.completionDate,
+            departureWeight: order.departureWeight,
+            arrivalWeight: order.arrivalWeight,
+            clientName: order.basin?.client?.name || order.client?.name,
+            senderName: order.logisticSender?.name,
+            recipientName: order.logisticRecipient?.name,
+            isRejected: order.isRejected
+          });
         } else {
-          console.log(`❌ Escluso ordine ${order.orderNumber} con stato: ${order.status}`);
+          console.log(`❌ Ordine escluso: ${order.orderNumber} (status: ${order.status})`);
         }
+        
         return isCompleted;
       });
 
-      // Ordina per data di completamento (più recenti primi)
+      // ✅ ORDINAMENTO per data di completamento
       const sortedOrders = completedOrders.sort((a: ShippedOrder, b: ShippedOrder) => {
-        const dateA = new Date(a.pickupOrder?.completionDate || 0);
-        const dateB = new Date(b.pickupOrder?.completionDate || 0);
+        const dateA = new Date(a.completionDate || a.updatedAt || a.createdAt || 0);
+        const dateB = new Date(b.completionDate || b.updatedAt || b.createdAt || 0);
         return dateB.getTime() - dateA.getTime();
       });
 
@@ -153,22 +170,23 @@ const ShippedOrderHistory = () => {
       console.log('✅ === FINE CARICAMENTO STORICO ===');
       
     } catch (error: any) {
-      console.error('❌ Error loading shipped orders:', error);
+      console.error('❌ Errore nel caricamento dello storico spedizioni:', error);
       setError(error.response?.data?.message || 'Errore nel caricamento dello storico spedizioni');
     } finally {
       setLoading(false);
     }
   };
 
-  // Applica i filtri
+  // ✅ CORREZIONE: Filtri aggiornati per la struttura dati corretta
   useEffect(() => {
     let filtered = [...orders];
 
     // Filtro per cliente
     if (filters.client) {
-      filtered = filtered.filter(order => 
-        order.pickupOrder?.basin?.client?.name?.toLowerCase().includes(filters.client.toLowerCase())
-      );
+      filtered = filtered.filter(order => {
+        const clientName = order.basin?.client?.name || order.client?.name || '';
+        return clientName.toLowerCase().includes(filters.client.toLowerCase());
+      });
     }
 
     // Filtro per termine di ricerca
@@ -176,16 +194,16 @@ const ShippedOrderHistory = () => {
       const term = filters.searchTerm.toLowerCase();
       filtered = filtered.filter(order =>
         order.orderNumber.toLowerCase().includes(term) ||
-        order.pickupOrder?.basin?.code?.toLowerCase().includes(term) ||
-        order.pickupOrder?.logisticSender?.name?.toLowerCase().includes(term) ||
-        order.pickupOrder?.logisticRecipient?.name?.toLowerCase().includes(term)
+        order.basin?.code?.toLowerCase().includes(term) ||
+        order.logisticSender?.name?.toLowerCase().includes(term) ||
+        order.logisticRecipient?.name?.toLowerCase().includes(term)
       );
     }
 
     // Filtro per data di completamento
     if (filters.dateFrom || filters.dateTo) {
       filtered = filtered.filter(order => {
-        const orderDate = order.pickupOrder?.completionDate;
+        const orderDate = order.completionDate || order.issueDate;
         if (!orderDate) return false;
 
         const date = new Date(orderDate);
@@ -195,7 +213,7 @@ const ShippedOrderHistory = () => {
         if (fromDate && date < fromDate) return false;
         if (toDate) {
           const endDate = new Date(toDate);
-          endDate.setHours(23, 59, 59, 999); // Fine del giorno
+          endDate.setHours(23, 59, 59, 999);
           if (date > endDate) return false;
         }
 
@@ -204,7 +222,7 @@ const ShippedOrderHistory = () => {
     }
 
     setFilteredOrders(filtered);
-    setCurrentPage(1); // Reset paginazione
+    setCurrentPage(1);
   }, [orders, filters]);
 
   // Paginazione
@@ -240,17 +258,33 @@ const ShippedOrderHistory = () => {
     return { label: status, color: 'default' as const, icon: <LocalShipping /> };
   };
 
-  // Calcola statistiche
+  // ✅ CORREZIONE: Calcolo statistiche con fallback
   const getStats = () => {
     const total = filteredOrders.length;
-    const completed = filteredOrders.filter(o => !o.pickupOrder?.isRejected).length;
-    const rejected = filteredOrders.filter(o => o.pickupOrder?.isRejected).length;
+    const completed = filteredOrders.filter(o => !o.isRejected).length;
+    const rejected = filteredOrders.filter(o => o.isRejected).length;
     const totalWeight = filteredOrders.reduce((sum, order) => {
-      const weight = order.pickupOrder?.arrivalWeight || order.pickupOrder?.departureWeight || 0;
+      const weight = order.arrivalWeight || order.departureWeight || 0;
       return sum + weight;
     }, 0);
     
     return { total, completed, rejected, totalWeight };
+  };
+
+  // ✅ HELPER: Formatta data con fallback
+  const formatDate = (dateString?: string, withTime = false) => {
+    if (!dateString) return 'N/D';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/D';
+      
+      const formatString = withTime ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy';
+      return format(date, formatString, { locale: it });
+    } catch (error) {
+      console.error('Errore nel formato data:', error);
+      return 'N/D';
+    }
   };
 
   const stats = getStats();
@@ -277,6 +311,15 @@ const ShippedOrderHistory = () => {
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
+      {/* ✅ Debug Info - Rimuovi in produzione */}
+      {orders.length > 0 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          🔍 Debug: Caricati {orders.length} ordini. 
+          Primo ordine: {orders[0]?.orderNumber} - 
+          Cliente: {orders[0]?.basin?.client?.name || orders[0]?.client?.name || 'N/D'}
+        </Alert>
+      )}
 
       {/* Statistiche */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -389,6 +432,7 @@ const ShippedOrderHistory = () => {
                   size="small"
                   sx={{ height: '40px' }}
                   fullWidth
+                  disabled={filteredOrders.length === 0}
                 >
                   📊 Export Excel
                 </Button>
@@ -407,10 +451,12 @@ const ShippedOrderHistory = () => {
               <Typography sx={{ ml: 2 }}>Caricamento storico spedizioni...</Typography>
             </Box>
           ) : filteredOrders.length === 0 ? (
-            <Alert severity="info">
+            <Alert severity="warning">
               {filters.searchTerm || filters.client || filters.dateFrom || filters.dateTo ? 
                 'Nessuna spedizione completata trovata con i filtri selezionati' :
-                'Nessuna spedizione completata presente nello storico'
+                orders.length === 0 ? 
+                  'Nessuna spedizione completata presente nel sistema. Verifica che ci siano ordini con status "COMPLETO".' :
+                  'Tutti gli ordini sono stati filtrati. Prova a modificare i criteri di ricerca.'
               }
             </Alert>
           ) : (
@@ -435,22 +481,22 @@ const ShippedOrderHistory = () => {
                   </TableHead>
                   <TableBody>
                     {paginatedOrders.map((order) => {
-                      const statusDisplay = getStatusDisplay(order.status, order.pickupOrder?.isRejected);
+                      const statusDisplay = getStatusDisplay(order.status, order.isRejected);
                       
                       return (
                         <TableRow key={order.id}>
                           <TableCell>
                             <Typography variant="body2" fontWeight="bold">
-                              {order.orderNumber}
+                              {order.orderNumber || 'N/D'}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {order.pickupOrder?.basin?.code || 'N/D'}
+                              {order.basin?.code || 'N/D'}
                             </Typography>
                           </TableCell>
                           
                           <TableCell>
                             <Typography variant="body2">
-                              {order.pickupOrder?.basin?.client?.name || 'N/D'}
+                              {order.basin?.client?.name || order.client?.name || 'N/D'}
                             </Typography>
                           </TableCell>
                           
@@ -461,12 +507,12 @@ const ShippedOrderHistory = () => {
                               size="small"
                               icon={statusDisplay.icon}
                             />
-                            {order.pickupOrder?.isRejected && order.pickupOrder?.rejectionReason && (
-                              <Tooltip title={order.pickupOrder.rejectionReason}>
+                            {order.isRejected && order.rejectionReason && (
+                              <Tooltip title={order.rejectionReason}>
                                 <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
-                                  {order.pickupOrder.rejectionReason.length > 30 
-                                    ? `${order.pickupOrder.rejectionReason.substring(0, 30)}...` 
-                                    : order.pickupOrder.rejectionReason
+                                  {order.rejectionReason.length > 30 
+                                    ? `${order.rejectionReason.substring(0, 30)}...` 
+                                    : order.rejectionReason
                                   }
                                 </Typography>
                               </Tooltip>
@@ -475,47 +521,35 @@ const ShippedOrderHistory = () => {
                           
                           <TableCell>
                             <Typography variant="body2" noWrap>
-                              <strong>Da:</strong> {order.pickupOrder?.logisticSender?.name || 'N/D'}
+                              <strong>Da:</strong> {order.logisticSender?.name || 'N/D'}
                             </Typography>
                             <Typography variant="body2" noWrap>
-                              <strong>A:</strong> {order.pickupOrder?.logisticRecipient?.name || 'N/D'}
+                              <strong>A:</strong> {order.logisticRecipient?.name || 'N/D'}
                             </Typography>
                           </TableCell>
                           
                           <TableCell>
-                            {order.pickupOrder?.issueDate ? 
-                              format(new Date(order.pickupOrder.issueDate), 'dd/MM/yyyy', { locale: it }) : 
-                              'N/D'
-                            }
+                            {formatDate(order.issueDate)}
                           </TableCell>
                           
                           <TableCell>
-                            {order.pickupOrder?.loadingDate ? 
-                              format(new Date(order.pickupOrder.loadingDate), 'dd/MM/yyyy HH:mm', { locale: it }) : 
-                              'N/D'
-                            }
+                            {formatDate(order.loadingDate, true)}
                           </TableCell>
                           
                           <TableCell>
-                            {order.pickupOrder?.unloadingDate ? 
-                              format(new Date(order.pickupOrder.unloadingDate), 'dd/MM/yyyy HH:mm', { locale: it }) : 
-                              'N/D'
-                            }
+                            {formatDate(order.unloadingDate, true)}
                           </TableCell>
                           
                           <TableCell>
                             <Typography variant="body2" color="success.main" fontWeight="bold">
-                              {order.pickupOrder?.completionDate ? 
-                                format(new Date(order.pickupOrder.completionDate), 'dd/MM/yyyy HH:mm', { locale: it }) : 
-                                'N/D'
-                              }
+                              {formatDate(order.completionDate, true)}
                             </Typography>
                           </TableCell>
                           
                           <TableCell>
                             <Chip
-                              label={order.pickupOrder?.departureWeight ? 
-                                `${order.pickupOrder.departureWeight} t` : 
+                              label={order.departureWeight ? 
+                                `${order.departureWeight} t` : 
                                 'N/D'
                               }
                               color="info"
@@ -525,18 +559,18 @@ const ShippedOrderHistory = () => {
                           
                           <TableCell>
                             <Chip
-                              label={order.pickupOrder?.arrivalWeight ? 
-                                `${order.pickupOrder.arrivalWeight} t` : 
+                              label={order.arrivalWeight ? 
+                                `${order.arrivalWeight} t` : 
                                 'N/D'
                               }
-                              color={order.pickupOrder?.isRejected ? "error" : "success"}
+                              color={order.isRejected ? "error" : "success"}
                               size="small"
                             />
                           </TableCell>
                           
                           <TableCell>
                             <Chip
-                              label={order.pickupOrder?.loadedPackages || 'N/D'}
+                              label={order.loadedPackages || 'N/D'}
                               color="default"
                               size="small"
                             />

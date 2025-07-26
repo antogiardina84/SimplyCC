@@ -81,7 +81,7 @@ function ShipmentOperatorDashboard() {
     setLoading(true);
     setError(null);
     try {
-      // CORREZIONE: Usa l'endpoint corretto del backend
+      // Usa l'endpoint corretto del backend
       const response = await api.get('/shipments/operator-dashboard');
       
       // Filtra per diversi stati
@@ -126,11 +126,14 @@ function ShipmentOperatorDashboard() {
     };
   }, []);
 
-  // CORREZIONE: Usa l'endpoint corretto per prendere in carico
+  // CORREZIONE VERA: Usa l'endpoint del workflow dei pickup-orders
   const handleTakeCharge = async (orderId: string) => {
     try {
-      // CORRETTO: Usa l'endpoint shipments con l'ID del PickupOrder
-      await api.post(`/shipments/${orderId}/start-loading`);
+      // ENDPOINT CORRETTO: pickup-orders workflow per auto-assegnazione operatore
+      await api.post(`/pickup-orders/${orderId}/workflow/assign-operator`, {
+        // L'operatorId viene auto-assegnato dal backend (operatore corrente)
+        notes: 'Presa in carico da dashboard operatore'
+      });
       fetchData(); // Refresh data
     } catch (err: any) {
       console.error('Errore nella presa in carico:', err);
@@ -138,7 +141,7 @@ function ShipmentOperatorDashboard() {
     }
   };
 
-  // CORREZIONE: Usa l'endpoint corretto per completare il carico
+  // CORREZIONE VERA: Usa l'endpoint del workflow dei pickup-orders
   const handleCompleteLoading = async () => {
     if (!selectedOrder) return;
 
@@ -149,8 +152,8 @@ function ShipmentOperatorDashboard() {
 
     setCompleting(true);
     try {
-      // CORRETTO: Usa l'endpoint shipments con l'ID del PickupOrder
-      await api.post(`/shipments/${selectedOrder.id}/complete-loading`, {
+      // ENDPOINT CORRETTO: pickup-orders workflow per completare il carico
+      await api.post(`/pickup-orders/${selectedOrder.id}/workflow/complete-loading`, {
         packageCount: parseFloat(loadedPackages),
         notes: loadingNotes,
       });

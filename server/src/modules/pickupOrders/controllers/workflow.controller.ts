@@ -1,24 +1,17 @@
 // server/src/modules/pickupOrders/controllers/workflow.controller.ts - VERSIONE CORRETTA
 
-import { Request, Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
+import { AuthRequest } from '../../../core/middleware/auth.middleware'; // ← CORREZIONE CRITICA
 import { PrismaClient } from '@prisma/client';
 import * as workflowService from '../services/workflow.service';
 import { HttpException } from '../../../core/middleware/error.middleware';
 
 const prisma = new PrismaClient();
 
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    role: string;
-    email: string;
-  };
-}
-
 /**
  * Cambia lo stato di un buono di ritiro
  */
-export const changeStatus = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const changeStatus = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { newStatus, reason, notes, additionalData } = req.body;
@@ -53,7 +46,7 @@ export const changeStatus = async (req: AuthenticatedRequest, res: Response, nex
 /**
  * Programma un buono di ritiro (DA_EVADERE -> PROGRAMMATO)
  */
-export const schedulePickupOrder = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const schedulePickupOrder = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { scheduledDate, notes } = req.body;
@@ -91,7 +84,7 @@ export const schedulePickupOrder = async (req: AuthenticatedRequest, res: Respon
 /**
  * Avvia evasione (PROGRAMMATO -> IN_EVASIONE)
  */
-export const startEvading = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const startEvading = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { notes } = req.body;
@@ -125,7 +118,7 @@ export const startEvading = async (req: AuthenticatedRequest, res: Response, nex
 /**
  * Assegna operatore e prende in carico (IN_EVASIONE -> IN_CARICO)
  */
-export const assignOperator = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const assignOperator = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { operatorId, notes } = req.body;
@@ -135,6 +128,49 @@ export const assignOperator = async (req: AuthenticatedRequest, res: Response, n
     }
 
     const finalOperatorId = operatorId || req.user.id;
+
+    console.log('🔧 DEBUG assign-operator:', {
+      orderId: id,
+      requestUserId: req.user.id,
+      requestUserRole: req.user.role,
+      finalOperatorId,
+      notes
+    });
+
+    // AGGIUNTO: Verifica che l'operatore esista
+    console.log('👤 Verifica esistenza operatore...');
+    const operator = await prisma.user.findUnique({
+      where: { id: finalOperatorId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        active: true
+      }
+    });
+
+    if (!operator) {
+      console.error(`❌ Operatore non trovato: ${finalOperatorId}`);
+      throw new HttpException(404, 'Operatore non trovato');
+    }
+
+    if (!operator.active) {
+      console.error(`❌ Operatore non attivo: ${finalOperatorId}`);
+      throw new HttpException(400, 'Operatore non attivo');
+    }
+
+    if (!['OPERATOR', 'MANAGER', 'ADMIN'].includes(operator.role)) {
+      console.error(`❌ Ruolo operatore non valido: ${operator.role}`);
+      throw new HttpException(400, 'Utente non autorizzato come operatore');
+    }
+
+    console.log(`✅ Operatore validato:`, {
+      id: operator.id,
+      name: `${operator.firstName} ${operator.lastName}`,
+      role: operator.role,
+      active: operator.active
+    });
 
     const result = await workflowService.changePickupOrderStatus({
       pickupOrderId: id,
@@ -154,14 +190,14 @@ export const assignOperator = async (req: AuthenticatedRequest, res: Response, n
       data: result
     });
   } catch (error) {
+    console.error('❌ Errore in assignOperator:', error);
     next(error);
   }
 };
-
 /**
  * Completa carico (IN_CARICO -> CARICATO)
  */
-export const completeLoading = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const completeLoading = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { packageCount, notes } = req.body;
@@ -195,7 +231,7 @@ export const completeLoading = async (req: AuthenticatedRequest, res: Response, 
 /**
  * Finalizza spedizione (CARICATO -> SPEDITO)
  */
-export const finalizeShipment = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const finalizeShipment = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { departureWeight, notes } = req.body;
@@ -233,7 +269,7 @@ export const finalizeShipment = async (req: AuthenticatedRequest, res: Response,
 /**
  * Completa ordine con riscontro destinatario (SPEDITO -> COMPLETO)
  */
-export const completeOrder = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const completeOrder = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { arrivalWeight, isRejected, rejectionReason, notes } = req.body;
@@ -279,7 +315,7 @@ export const completeOrder = async (req: AuthenticatedRequest, res: Response, ne
 /**
  * Rollback a PROGRAMMATO (da IN_EVASIONE)
  */
-export const rollbackToProgrammed = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const rollbackToProgrammed = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { reason, notes } = req.body;
@@ -310,7 +346,7 @@ export const rollbackToProgrammed = async (req: AuthenticatedRequest, res: Respo
 /**
  * Rollback a IN_EVASIONE (da IN_CARICO)
  */
-export const rollbackToEvading = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const rollbackToEvading = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { reason, notes } = req.body;
@@ -344,7 +380,7 @@ export const rollbackToEvading = async (req: AuthenticatedRequest, res: Response
 /**
  * Rollback a IN_CARICO (da CARICATO)
  */
-export const rollbackToLoading = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const rollbackToLoading = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { reason, notes } = req.body;
@@ -378,7 +414,7 @@ export const rollbackToLoading = async (req: AuthenticatedRequest, res: Response
 /**
  * Rollback a CARICATO (da SPEDITO)
  */
-export const rollbackToLoaded = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const rollbackToLoaded = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { reason, notes } = req.body;
@@ -413,7 +449,7 @@ export const rollbackToLoaded = async (req: AuthenticatedRequest, res: Response,
 /**
  * Registra attività operatore
  */
-export const recordActivity = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const recordActivity = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { activityType, description, photos, videos, packageCount, notes } = req.body;
@@ -444,7 +480,7 @@ export const recordActivity = async (req: AuthenticatedRequest, res: Response, n
 /**
  * Ottiene operatori disponibili
  */
-export const getAvailableOperators = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getAvailableOperators = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const operators = await workflowService.getAvailableOperators();
 
@@ -460,7 +496,7 @@ export const getAvailableOperators = async (req: AuthenticatedRequest, res: Resp
 /**
  * Ottiene storico completo di un buono di ritiro
  */
-export const getOrderHistory = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getOrderHistory = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
 
@@ -478,7 +514,7 @@ export const getOrderHistory = async (req: AuthenticatedRequest, res: Response, 
 /**
  * Ottiene i miei ordini (per operatori)
  */
-export const getMyOrders = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getMyOrders = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     if (!req.user) {
       throw new HttpException(401, 'Utente non autenticato');
@@ -517,7 +553,7 @@ export const getMyOrders = async (req: AuthenticatedRequest, res: Response, next
 /**
  * Ottiene ordini programmati per oggi
  */
-export const getTodayScheduled = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getTodayScheduled = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -561,7 +597,7 @@ export const getTodayScheduled = async (req: AuthenticatedRequest, res: Response
 /**
  * Ottiene statistiche del workflow
  */
-export const getWorkflowStats = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const getWorkflowStats = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { dateFrom, dateTo } = req.query;
 

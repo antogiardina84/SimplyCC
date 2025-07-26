@@ -1,4 +1,4 @@
-// client/src/app/routes/index.tsx - ROUTES COMPLETE CON DELIVERIES CORRETTE
+// client/src/app/routes/index.tsx - ROUTES COMPLETE CON PROFILE CORRETTO
 
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
@@ -8,6 +8,27 @@ import ProtectedRoute from './ProtectedRoute';
 // Lazy loading dei componenti esistenti
 const Dashboard = lazy(() => import('../../modules/dashboard/pages/Dashboard'));
 const Login = lazy(() => import('../../modules/auth/pages/Login'));
+
+// ✅ CORREZIONE: Profile import corretto
+const Profile = lazy(() => 
+  import('../../modules/profile/pages/Profile')
+    .catch(() => 
+      import('../../modules/users/pages/Profile') // Fallback se in users
+        .catch(() => ({
+          default: () => (
+            <Box sx={{ p: 3 }}>
+              <h2>👤 Profilo Utente</h2>
+              <p>⚠️ Componente Profile non trovato nei percorsi:</p>
+              <ul>
+                <li>client/src/modules/profile/pages/Profile.tsx</li>
+                <li>client/src/modules/users/pages/Profile.tsx</li>
+              </ul>
+              <p>Utilizzare il file Profile.tsx fornito negli artefatti.</p>
+            </Box>
+          )
+        }))
+    )
+);
 
 // Pickup Orders
 const PickupOrderList = lazy(() => import('../../modules/pickupOrders/pages/PickupOrderList'));
@@ -186,6 +207,20 @@ const AppRoutes = () => {
 
         {/* Protected Routes */}
         <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        
+        {/* ========================================
+            ✅ PROFILE ROUTE - CORREZIONE CRITICA
+        ======================================== */}
+        <Route 
+          path="/profile" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <Profile />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
         
         {/* ========================================
             PICKUP ORDERS ROUTES

@@ -25,7 +25,9 @@ model User {
   // Relazioni per operatori
   assignedOrders     PickupOrder[] @relation("OperatorAssigned")
   operatorActivities OperatorActivity[]
-  processingSessions Processing[] @relation("ProcessingOperator")
+  
+  // AGGIUNTO: Relazioni per lavorazioni
+  processingSessions ProcessingSession[] @relation("ProcessingSessionOperator")
   
   // Validazioni conferimenti
   validatedDeliveries Delivery[] @relation("DeliveryValidator")
@@ -154,6 +156,9 @@ model MaterialType {
   isActive        Boolean  @default(true)
   sortOrder       Int      @default(0) // Ordine visualizzazione
   
+  // AGGIUNTO: Campo per gestione contesti di utilizzo
+  usageContext    String?  // JSON array: ["CONFERIMENTI", "LAVORAZIONI_INPUT", "LAVORAZIONI_OUTPUT", "USCITE"]
+  
   // Sottocategorie (per PLASTICA -> COREPET, etc.)
   parentId        String?
   parent          MaterialType? @relation("MaterialTypeHierarchy", fields: [parentId], references: [id])
@@ -162,9 +167,14 @@ model MaterialType {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
-  // Relazioni
+  // Relazioni esistenti
   deliveries      Delivery[] @relation("DeliveryMaterialType")
   inventories     Inventory[] @relation("InventoryMaterialType")
+  
+  // AGGIUNTO: Relazioni per lavorazioni
+  processingInputs   ProcessingInput[]  @relation("ProcessingInputMaterial")
+  processingOutputs  ProcessingOutput[] @relation("ProcessingOutputMaterial")
+  processingWastes   ProcessingWaste[]  @relation("ProcessingWasteMaterial")
   
   @@index([code])
   @@index([parentId])
@@ -384,53 +394,133 @@ model Delivery {
 }
 
 // ================================
-// GESTIONE LAVORAZIONI
+// GESTIONE LAVORAZIONI AVANZATA (NUOVA SEZIONE)
 // ================================
 
-model Processing {
+model ProcessingSession {
   id              String   @id @default(uuid())
   date            DateTime // Data lavorazione
-  shift           String   // Turno: MORNING, AFTERNOON, NIGHT
+  shiftNumber     Int      // 1=primo turno, 2=secondo turno, 3=terzo turno
   
   // Operatore responsabile
-  operatorId      String?
-  operator        User?    @relation(fields: [operatorId], references: [id], name: "ProcessingOperator")
+  operatorId      String
+  operator        User     @relation(fields: [operatorId], references: [id], name: "ProcessingSessionOperator")
   
-  // Materiale in ingresso
-  inputMaterialType String
-  inputWeight     Float    // Peso materiale in ingresso
-  inputReference  String   // COREPLA, CORIPET, etc.
+  // Timing
+  startTime       DateTime?
+  endTime         DateTime?
   
-  // Efficienza lavorazione
-  efficiency      Float?   // Percentuale di resa
-  wasteWeight     Float?   // Peso scarti prodotti
+  // Stato sessione
+  status          String   @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, SUSPENDED, CANCELLED
   
-  // Note
+  // Note generali
   notes           String?
   
+  // Audit
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  createdBy       String?
   
   // Relazioni
+  inputs          ProcessingInput[]
   outputs         ProcessingOutput[]
-
-  // Indici
-  @@index([date, shift])
+  waste           ProcessingWaste[]
+  
+  @@unique([date, shiftNumber]) // Un solo turno per data
+  @@index([date])
   @@index([operatorId])
 }
 
+model ProcessingInput {
+  id                String   @id @default(uuid())
+  processingSessionId String
+  processingSession ProcessingSession @relation(fields: [processingSessionId], references: [id], onDelete: Cascade)
+  
+  // Materiale utilizzato
+  materialTypeId    String
+  materialType      MaterialType @relation(fields: [materialTypeId], references: [id], name: "ProcessingInputMaterial")
+  
+  // Origine materiale
+  sourceType        String   // DELIVERY (da conferimento), STOCK (da giacenza)
+  sourceId          String?  // ID del conferimento o movimento giacenza
+  
+  // Quantità
+  quantityUsed      Float    // Quantità utilizzata
+  unit              String   @default("kg")
+  
+  // Qualità materiale in ingresso
+  qualityGrade      String?  // EXCELLENT, GOOD, POOR, CONTAMINATED
+  moistureLevel     String?  // LOW, MEDIUM, HIGH
+  contaminationPercent Float @default(0)
+  
+  // Note specifiche
+  notes             String?
+  
+  // Audit
+  createdAt         DateTime @default(now())
+  
+  @@index([processingSessionId])
+  @@index([materialTypeId])
+}
+
 model ProcessingOutput {
-  id              String   @id @default(uuid())
-  processingId    String
-  processing      Processing @relation(fields: [processingId], references: [id])
+  id                String   @id @default(uuid())
+  processingSessionId String
+  processingSession ProcessingSession @relation(fields: [processingSessionId], references: [id], onDelete: Cascade)
   
-  // Prodotto ottenuto
-  outputMaterialType String
-  outputWeight    Float    // Peso prodotto
-  outputReference String   // COREPLA, CORIPET, etc.
-  quality         String?  // Qualità del prodotto
+  // Materiale prodotto
+  materialTypeId    String
+  materialType      MaterialType @relation(fields: [materialTypeId], references: [id], name: "ProcessingOutputMaterial")
   
-  createdAt       DateTime @default(now())
+  // Quantità prodotta
+  quantityProduced  Float    // Quantità prodotta
+  unit              String   @default("kg")
+  
+  // Dettagli produzione
+  qualityGrade      String   @default("GOOD") // EXCELLENT, GOOD, POOR
+  packageCount      Int      @default(0) // Numero colli/balle
+  packageType       String?  // Tipo imballaggio (balle, sacchi, etc.)
+  
+  // Stoccaggio
+  storageLocation   String?  // Ubicazione stoccaggio
+  batchNumber       String?  // Numero lotto
+  
+  // Note specifiche
+  notes             String?
+  
+  // Audit
+  createdAt         DateTime @default(now())
+  
+  @@index([processingSessionId])
+  @@index([materialTypeId])
+}
+
+model ProcessingWaste {
+  id                String   @id @default(uuid())
+  processingSessionId String
+  processingSession ProcessingSession @relation(fields: [processingSessionId], references: [id], onDelete: Cascade)
+  
+  // Tipo di scarto
+  wasteTypeId       String
+  wasteType         MaterialType @relation(fields: [wasteTypeId], references: [id], name: "ProcessingWasteMaterial")
+  
+  // Quantità
+  quantity          Float    // Quantità scarto
+  unit              String   @default("kg")
+  
+  // Gestione smaltimento
+  disposalMethod    String?  // LANDFILL, INCINERATION, RECYCLING, OTHER
+  disposalDestination String? // Destinazione smaltimento
+  cerCode           String?  // Codice CER se applicabile
+  
+  // Note
+  notes             String?
+  
+  // Audit
+  createdAt         DateTime @default(now())
+  
+  @@index([processingSessionId])
+  @@index([wasteTypeId])
 }
 
 // ================================
@@ -507,4 +597,53 @@ model MerceologicalAnalysis {
   // Indici
   @@index([date])
   @@index([basinId, flowType])
+}
+
+// ================================
+// MODELLO PROCESSING DEPRECATO (Da rimuovere in futuro)
+// ================================
+
+model Processing {
+  id              String   @id @default(uuid())
+  date            DateTime // Data lavorazione
+  shift           String   // Turno: MORNING, AFTERNOON, NIGHT
+  
+  // Operatore responsabile
+  operatorId      String?
+  
+  // Materiale in ingresso
+  inputMaterialType String
+  inputWeight     Float    // Peso materiale in ingresso
+  inputReference  String   // COREPLA, CORIPET, etc.
+  
+  // Efficienza lavorazione
+  efficiency      Float?   // Percentuale di resa
+  wasteWeight     Float?   // Peso scarti prodotti
+  
+  // Note
+  notes           String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relazioni
+  outputs         ProcessingOutput_Old[]
+
+  // Indici
+  @@index([date, shift])
+  @@index([operatorId])
+}
+
+model ProcessingOutput_Old {
+  id              String   @id @default(uuid())
+  processingId    String
+  processing      Processing @relation(fields: [processingId], references: [id])
+  
+  // Prodotto ottenuto
+  outputMaterialType String
+  outputWeight    Float    // Peso prodotto
+  outputReference String   // COREPLA, CORIPET, etc.
+  quality         String?  // Qualità del prodotto
+  
+  createdAt       DateTime @default(now())
 }
