@@ -1,4 +1,4 @@
-// client/src/app/layout/ResponsiveNavbar.tsx - VERSIONE CORRETTA COMPLETA
+// client/src/app/layout/ResponsiveNavbar.tsx - VERSIONE CORRETTA COMPLETA CON PROCESSING E INVENTORY
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -49,7 +49,12 @@ import {
   Menu as MenuIcon,
   ExpandLess,
   ExpandMore,
-  Close
+  Close,
+  // ICONE CORRETTE PER PROCESSING E INVENTORY
+  Settings as ProcessingIcon, // Sostituto per Precision
+  Inventory2 as InventoryIcon,
+  Factory as ProductionIcon,
+  Analytics as ReportIcon
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import * as authService from '../../modules/auth/services/authService';
@@ -85,6 +90,9 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
   const [deliveriesMenuAnchor, setDeliveriesMenuAnchor] = useState<null | HTMLElement>(null);
   const [ordersMenuAnchor, setOrdersMenuAnchor] = useState<null | HTMLElement>(null);
   const [shipmentsMenuAnchor, setShipmentsMenuAnchor] = useState<null | HTMLElement>(null);
+  // NUOVI STATI AGGIUNTI PER PROCESSING E INVENTORY
+  const [processingMenuAnchor, setProcessingMenuAnchor] = useState<null | HTMLElement>(null);
+  const [inventoryMenuAnchor, setInventoryMenuAnchor] = useState<null | HTMLElement>(null);
   const [userProfileAnchor, setUserProfileAnchor] = useState<null | HTMLElement>(null);
 
   // Stati per il menu mobile
@@ -206,6 +214,9 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
     setDeliveriesMenuAnchor(null);
     setOrdersMenuAnchor(null);
     setShipmentsMenuAnchor(null);
+    // AGGIUNTI I NUOVI MENU
+    setProcessingMenuAnchor(null);
+    setInventoryMenuAnchor(null);
     setMobileMenuOpen(false);
   };
 
@@ -529,22 +540,88 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
           </List>
         </Collapse>
 
-        {/* Menu singoli */}
+        {/* === NUOVE SEZIONI AGGIUNTE: PROCESSING E INVENTORY === */}
+
+        {/* Lavorazioni (Processing) */}
         <ListItemButton
-          onClick={() => handleNavigation('/processing')}
-          selected={isActivePath('/processing')}
-          sx={{ 
-            color: 'white',
-            '&.Mui-selected': { backgroundColor: 'rgba(255,255,255,0.1)' },
-            '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' }
-          }}
+          onClick={() => handleMobileExpand('processing')}
+          sx={{ color: 'white', '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' } }}
         >
           <ListItemIcon sx={{ color: 'white' }}>
-            <Science />
+            <ProcessingIcon />
           </ListItemIcon>
           <ListItemText primary="Lavorazioni" />
+          {expandedMobile.includes('processing') ? <ExpandLess /> : <ExpandMore />}
         </ListItemButton>
+        <Collapse in={expandedMobile.includes('processing')}>
+          <List component="div" disablePadding>
+            <ListItemButton 
+              sx={{ pl: 4, color: 'rgba(255,255,255,0.8)', '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' } }}
+              onClick={() => handleNavigation('/processing')}
+            >
+              <ListItemIcon sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                <ProductionIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Lista Lavorazioni" />
+            </ListItemButton>
+            <ListItemButton 
+              sx={{ pl: 4, color: 'rgba(255,255,255,0.8)', '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' } }}
+              onClick={() => handleNavigation('/processing/new')}
+            >
+              <ListItemIcon sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                <Add fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Nuova Lavorazione" />
+            </ListItemButton>
+          </List>
+        </Collapse>
 
+        {/* Giacenze (Inventory) */}
+        <ListItemButton
+          onClick={() => handleMobileExpand('inventory')}
+          sx={{ color: 'white', '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' } }}
+        >
+          <ListItemIcon sx={{ color: 'white' }}>
+            <InventoryIcon />
+          </ListItemIcon>
+          <ListItemText primary="Giacenze" />
+          {expandedMobile.includes('inventory') ? <ExpandLess /> : <ExpandMore />}
+        </ListItemButton>
+        <Collapse in={expandedMobile.includes('inventory')}>
+          <List component="div" disablePadding>
+            <ListItemButton 
+              sx={{ pl: 4, color: 'rgba(255,255,255,0.8)', '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' } }}
+              onClick={() => handleNavigation('/inventory')}
+            >
+              <ListItemIcon sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                <Inventory fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Movimenti Giacenze" />
+            </ListItemButton>
+            <ListItemButton 
+              sx={{ pl: 4, color: 'rgba(255,255,255,0.8)', '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' } }}
+              onClick={() => handleNavigation('/inventory/new')}
+            >
+              <ListItemIcon sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                <Add fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Nuovo Movimento" />
+            </ListItemButton>
+            <ListItemButton 
+              sx={{ pl: 4, color: 'rgba(255,255,255,0.8)', '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' } }}
+              onClick={() => handleNavigation('/inventory/report')}
+            >
+              <ListItemIcon sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                <ReportIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Report Giacenze" />
+            </ListItemButton>
+          </List>
+        </Collapse>
+
+        {/* === FINE NUOVE SEZIONI === */}
+
+        {/* Menu singoli */}
         <ListItemButton
           onClick={() => handleNavigation('/analysis')}
           selected={isActivePath('/analysis')}
@@ -558,21 +635,6 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
             <Science />
           </ListItemIcon>
           <ListItemText primary="Analisi" />
-        </ListItemButton>
-
-        <ListItemButton
-          onClick={() => handleNavigation('/inventory')}
-          selected={isActivePath('/inventory')}
-          sx={{ 
-            color: 'white',
-            '&.Mui-selected': { backgroundColor: 'rgba(255,255,255,0.1)' },
-            '&:hover': { backgroundColor: 'rgba(255,255,255,0.05)' }
-          }}
-        >
-          <ListItemIcon sx={{ color: 'white' }}>
-            <Inventory />
-          </ListItemIcon>
-          <ListItemText primary="Giacenze" />
         </ListItemButton>
 
         <ListItemButton
@@ -753,29 +815,37 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
               Spedizioni
             </Button>
 
-            {/* Menu Singoli - Solo icone se spazio limitato */}
+            {/* === NUOVI MENU DESKTOP AGGIUNTI === */}
+
+            {/* Lavorazioni */}
             <Button
-              startIcon={<Science />}
-              onClick={() => handleNavigation('/processing')}
+              startIcon={<ProcessingIcon />}
+              endIcon={<KeyboardArrowDown />}
+              onClick={(e) => handleMenuOpen(e, setProcessingMenuAnchor)}
               sx={menuButtonStyle(isActivePath('/processing'))}
             >
               Lavorazioni
             </Button>
 
+            {/* Giacenze */}
+            <Button
+              startIcon={<InventoryIcon />}
+              endIcon={<KeyboardArrowDown />}
+              onClick={(e) => handleMenuOpen(e, setInventoryMenuAnchor)}
+              sx={menuButtonStyle(isActivePath('/inventory'))}
+            >
+              Giacenze
+            </Button>
+
+            {/* === FINE NUOVI MENU === */}
+
+            {/* Menu Singoli - Solo icone se spazio limitato */}
             <Button
               startIcon={<Science />}
               onClick={() => handleNavigation('/analysis')}
               sx={menuButtonStyle(isActivePath('/analysis'))}
             >
               Analisi
-            </Button>
-
-            <Button
-              startIcon={<Inventory />}
-              onClick={() => handleNavigation('/inventory')}
-              sx={menuButtonStyle(isActivePath('/inventory'))}
-            >
-              Giacenze
             </Button>
 
             <Button
@@ -1067,6 +1137,62 @@ const ResponsiveNavbar: React.FC<ResponsiveNavbarProps> = () => {
           <ListItemText primary="Storico Spedizioni" />
         </MenuItem>
       </Menu>
+
+      {/* === NUOVI MENU DROPDOWN AGGIUNTI === */}
+
+      {/* Menu Processing (Lavorazioni) */}
+      <Menu
+        anchorEl={processingMenuAnchor}
+        open={Boolean(processingMenuAnchor)}
+        onClose={() => handleMenuClose(setProcessingMenuAnchor)}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            minWidth: 220,
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          }
+        }}
+      >
+        <MenuItem onClick={() => handleNavigation('/processing')}>
+          <ListItemIcon><ProductionIcon fontSize="small" /></ListItemIcon>
+          <ListItemText primary="Lista Lavorazioni" />
+        </MenuItem>
+        <MenuItem onClick={() => handleNavigation('/processing/new')}>
+          <ListItemIcon><Add fontSize="small" /></ListItemIcon>
+          <ListItemText primary="Nuova Lavorazione" />
+        </MenuItem>
+      </Menu>
+
+      {/* Menu Inventory (Giacenze) */}
+      <Menu
+        anchorEl={inventoryMenuAnchor}
+        open={Boolean(inventoryMenuAnchor)}
+        onClose={() => handleMenuClose(setInventoryMenuAnchor)}
+        PaperProps={{
+          sx: {
+            mt: 1,
+            minWidth: 240,
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          }
+        }}
+      >
+        <MenuItem onClick={() => handleNavigation('/inventory')}>
+          <ListItemIcon><Inventory fontSize="small" /></ListItemIcon>
+          <ListItemText primary="Movimenti Giacenze" />
+        </MenuItem>
+        <MenuItem onClick={() => handleNavigation('/inventory/new')}>
+          <ListItemIcon><Add fontSize="small" /></ListItemIcon>
+          <ListItemText primary="Nuovo Movimento" />
+        </MenuItem>
+        <MenuItem onClick={() => handleNavigation('/inventory/report')}>
+          <ListItemIcon><ReportIcon fontSize="small" /></ListItemIcon>
+          <ListItemText primary="Report Giacenze" />
+        </MenuItem>
+      </Menu>
+
+      {/* === FINE NUOVI MENU === */}
 
       {/* Menu Profilo Utente */}
       <Menu

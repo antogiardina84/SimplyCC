@@ -1,4 +1,4 @@
-// client/src/app/routes/index.tsx - ROUTES COMPLETE CON PROFILE CORRETTO
+// client/src/app/routes/index.tsx - ROUTES COMPLETE CON PROCESSING E INVENTORY
 
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
@@ -176,6 +176,88 @@ const ShippedOrderHistory = lazy(() =>
         <Box sx={{ p: 3 }}>
           <h2>📋 Storico Spedizioni</h2>
           <p>Pagina in sviluppo...</p>
+        </Box>
+      )
+    }))
+);
+
+// ===== NUOVE SEZIONI: PROCESSING E INVENTORY =====
+
+// ✅ PROCESSING - Nuove import con gestione errori
+const ProcessingList = lazy(() => 
+  import('../../modules/processing/pages/ProcessingList')
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>⚙️ Lista Lavorazioni</h2>
+          <p>⚠️ Componente non trovato: client/src/modules/processing/pages/ProcessingList.tsx</p>
+          <p>Usa gli artefatti forniti per creare questo file.</p>
+        </Box>
+      )
+    }))
+);
+
+const ProcessingForm = lazy(() => 
+  import('../../modules/processing/pages/ProcessingForm')
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>⚙️ Form Lavorazione</h2>
+          <p>⚠️ Componente non trovato: client/src/modules/processing/pages/ProcessingForm.tsx</p>
+          <p>Usa gli artefatti forniti per creare questo file.</p>
+        </Box>
+      )
+    }))
+);
+
+const ProcessingDetail = lazy(() => 
+  import('../../modules/processing/pages/ProcessingDetail')
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>⚙️ Dettaglio Lavorazione</h2>
+          <p>⚠️ Componente non trovato: client/src/modules/processing/pages/ProcessingDetail.tsx</p>
+          <p>Usa gli artefatti forniti per creare questo file.</p>
+        </Box>
+      )
+    }))
+);
+
+// ✅ INVENTORY - Nuove import con gestione errori
+const InventoryList = lazy(() => 
+  import('../../modules/inventory/pages/InventoryList')
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>📦 Gestione Giacenze</h2>
+          <p>⚠️ Componente non trovato: client/src/modules/inventory/pages/InventoryList.tsx</p>
+          <p>Usa gli artefatti forniti per creare questo file.</p>
+        </Box>
+      )
+    }))
+);
+
+const InventoryForm = lazy(() => 
+  import('../../modules/inventory/pages/InventoryForm')
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>📦 Form Movimento Giacenza</h2>
+          <p>⚠️ Componente non trovato: client/src/modules/inventory/pages/InventoryForm.tsx</p>
+          <p>Usa gli artefatti forniti per creare questo file.</p>
+        </Box>
+      )
+    }))
+);
+
+const InventoryDashboard = lazy(() => 
+  import('../../modules/inventory/pages/InventoryDashboard')
+    .catch(() => ({ 
+      default: () => (
+        <Box sx={{ p: 3 }}>
+          <h2>📦 Report Giacenze</h2>
+          <p>⚠️ Componente non trovato: client/src/modules/inventory/pages/InventoryDashboard.tsx</p>
+          <p>Usa gli artefatti forniti per creare questo file.</p>
         </Box>
       )
     }))
@@ -404,31 +486,107 @@ const AppRoutes = () => {
         />
         
         {/* ========================================
-            PLACEHOLDER ROUTES - FUTURE MODULES
+            ✅ PROCESSING ROUTES - NUOVA SEZIONE
         ======================================== */}
         <Route 
           path="/processing" 
           element={
             <ProtectedRoute>
-              <ComingSoon title="Lavorazioni" module="processing" />
+              <Suspense fallback={<LoadingSpinner />}>
+                <ProcessingList />
+              </Suspense>
             </ProtectedRoute>
           } 
         />
         
+        <Route 
+          path="/processing/new" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <ProcessingForm />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/processing/:id" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <ProcessingDetail />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/processing/:id/edit" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <ProcessingForm />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* ========================================
+            ✅ INVENTORY ROUTES - NUOVA SEZIONE
+        ======================================== */}
+        <Route 
+          path="/inventory" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <InventoryList />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/inventory/new" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <InventoryForm />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/inventory/report" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <InventoryDashboard />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        <Route 
+          path="/inventory/:id/edit" 
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<LoadingSpinner />}>
+                <InventoryForm />
+              </Suspense>
+            </ProtectedRoute>
+          } 
+        />
+        
+        {/* ========================================
+            PLACEHOLDER ROUTES - FUTURE MODULES
+        ======================================== */}
         <Route 
           path="/analysis" 
           element={
             <ProtectedRoute>
               <ComingSoon title="Analisi Merceologiche" module="analysis" />
-            </ProtectedRoute>
-          } 
-        />
-        
-        <Route 
-          path="/inventory" 
-          element={
-            <ProtectedRoute>
-              <ComingSoon title="Gestione Giacenze" module="inventory" />
             </ProtectedRoute>
           } 
         />

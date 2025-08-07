@@ -1,4 +1,4 @@
-// client/src/app/routes/routes.ts - AGGIORNATO
+// client/src/app/routes/routes.ts - AGGIORNATO CON PROCESSING E INVENTORY
 
 import { type ComponentType, lazy } from 'react';
 
@@ -30,6 +30,16 @@ const PickupOrderUpload = lazy(() => import('../../modules/pickupOrders/pages/Pi
 const ShipmentCalendar = lazy(() => import('../../modules/shipments/pages/ShipmentCalendar'));
 const ShipmentOperatorDashboard = lazy(() => import('../../modules/shipments/pages/ShipmentOperatorDashboard'));
 const ManagerFinalization = lazy(() => import('../../modules/shipments/pages/ManagerFinalization'));
+
+// === NUOVE PAGINE PROCESSING ===
+const ProcessingList = lazy(() => import('../../modules/processing/pages/ProcessingList'));
+const ProcessingForm = lazy(() => import('../../modules/processing/pages/ProcessingForm'));
+const ProcessingDetail = lazy(() => import('../../modules/processing/pages/ProcessingDetail'));
+
+// === NUOVE PAGINE INVENTORY ===
+const InventoryList = lazy(() => import('../../modules/inventory/pages/InventoryList'));
+const InventoryForm = lazy(() => import('../../modules/inventory/pages/InventoryForm'));
+const InventoryDashboard = lazy(() => import('../../modules/inventory/pages/InventoryDashboard'));
 
 // Placeholder per pagine non ancora implementate
 const PlaceholderPage = lazy(() => import('../../core/components/PlaceholderPage'));
@@ -155,6 +165,50 @@ export const routes: RouteConfig[] = [
     protected: true,
   },
 
+  // === NUOVE ROUTES PROCESSING ===
+  {
+    path: '/processing',
+    element: ProcessingList,
+    protected: true,
+  },
+  {
+    path: '/processing/new',
+    element: ProcessingForm,
+    protected: true,
+  },
+  {
+    path: '/processing/:id',
+    element: ProcessingDetail,
+    protected: true,
+  },
+  {
+    path: '/processing/:id/edit',
+    element: ProcessingForm,
+    protected: true,
+  },
+
+  // === NUOVE ROUTES INVENTORY ===
+  {
+    path: '/inventory',
+    element: InventoryList,
+    protected: true,
+  },
+  {
+    path: '/inventory/new',
+    element: InventoryForm,
+    protected: true,
+  },
+  {
+    path: '/inventory/report',
+    element: InventoryDashboard,
+    protected: true,
+  },
+  {
+    path: '/inventory/:id/edit',
+    element: InventoryForm,
+    protected: true,
+  },
+
   // Altre pagine placeholder
   {
     path: '/deliveries',
@@ -162,17 +216,7 @@ export const routes: RouteConfig[] = [
     protected: true,
   },
   {
-    path: '/processing',
-    element: PlaceholderPage,
-    protected: true,
-  },
-  {
     path: '/analysis',
-    element: PlaceholderPage,
-    protected: true,
-  },
-  {
-    path: '/inventory',
     element: PlaceholderPage,
     protected: true,
   },

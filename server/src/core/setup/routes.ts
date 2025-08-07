@@ -1,4 +1,4 @@
-// server/src/core/setup/routes.ts - VERSIONE COMPLETA E CORRETTA
+// server/src/core/setup/routes.ts - VERSIONE COMPLETA CON PROCESSING E INVENTORY
 
 import { Express } from 'express';
 
@@ -11,9 +11,11 @@ import { pickupOrderRoutes } from '../../modules/pickupOrders/routes';
 import { shipmentRoutes } from '../../modules/shipments/routes';
 import { logisticsRoutes } from '../../modules/shipments/routes/logistics.routes';
 import { dashboardRoutes } from '../../modules/dashboard/routes';
-
-// AGGIUNTO: Import delle routes per conferimenti
 import { deliveriesRoutes } from '../../modules/deliveries/routes';
+
+// NUOVE IMPORT AGGIUNTE PER PROCESSING E INVENTORY
+import processingRoutes from '../../modules/processing/routes';
+import inventoryRoutes from '../../modules/inventory/routes';
 
 export const setupRoutes = (app: Express, apiPrefix: string): void => {
   console.log('🚀 Setting up routes with prefix:', apiPrefix);
@@ -31,7 +33,7 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
         'auth', 'users', 'clients', 'basins',
         'pickup-orders', 'shipments', 'logistics',
         'dashboard', 'deliveries', 'contributors',
-        'material-types', 'calendar'
+        'material-types', 'calendar', 'processing', 'inventory'
       ]
     });
   });
@@ -82,6 +84,16 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
   // - /calendar/:year/:month -> deliveriesController.getMonthlyCalendar
   // - /calendar/day/:date -> deliveriesController.getDayDeliveries
   app.use(`${apiPrefix}`, deliveriesRoutes);
+  
+  // ================================
+  // PROCESSING AND INVENTORY ROUTES (NUOVE SEZIONI)
+  // ================================
+  
+  console.log('⚙️ Setting up processing routes...');
+  app.use(`${apiPrefix}/processing`, processingRoutes);
+  
+  console.log('📊 Setting up inventory routes...');
+  app.use(`${apiPrefix}/inventory`, inventoryRoutes);
   
   // ================================
   // DASHBOARD AND REPORTING ROUTES
@@ -231,7 +243,7 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
           ]
         },
         
-        // Deliveries Management (NUOVO)
+        // Deliveries Management
         deliveries: {
           base: `${apiPrefix}/deliveries`,
           description: 'Gestione conferimenti giornalieri',
@@ -295,6 +307,41 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
           ]
         },
         
+        // NUOVE SEZIONI: Processing e Inventory
+        processing: {
+          base: `${apiPrefix}/processing`,
+          description: 'Gestione lavorazioni e processi produttivi',
+          authentication: 'JWT Bearer token required',
+          routes: [
+            'GET / - Lista lavorazioni (con filtri data, operatore, turno)',
+            'GET /:id - Dettaglio lavorazione',
+            'POST / - Registra nuova lavorazione',
+            'PUT /:id - Modifica lavorazione',
+            'DELETE /:id - Elimina lavorazione',
+            'GET /stats - Statistiche lavorazioni (efficienza, volumi)',
+            'GET /operator/:operatorId - Lavorazioni per operatore',
+            'GET /date-range?startDate&endDate - Lavorazioni per periodo',
+            'GET /shifts/:shift - Lavorazioni per turno (MORNING/AFTERNOON/NIGHT)'
+          ]
+        },
+        inventory: {
+          base: `${apiPrefix}/inventory`,
+          description: 'Gestione giacenze e movimenti di magazzino',
+          authentication: 'JWT Bearer token required',
+          routes: [
+            'GET / - Lista movimenti giacenze (con filtri)',
+            'GET /:id - Dettaglio movimento',
+            'POST / - Registra nuovo movimento',
+            'PUT /:id - Modifica movimento',
+            'DELETE /:id - Elimina movimento',
+            'GET /stats - Statistiche giacenze correnti',
+            'GET /report?startDate&endDate&materialType - Report dettagliato',
+            'GET /latest/:materialType/:reference - Ultima giacenza per materiale',
+            'GET /current-stocks - Giacenze attuali per materiale',
+            'GET /movements/:materialType - Movimenti per tipo materiale'
+          ]
+        },
+        
         // Dashboard & Reporting
         dashboard: {
           base: `${apiPrefix}/dashboard`,
@@ -332,6 +379,19 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
           'LAVORAZIONE - Materiale avviato alla lavorazione',
           'COMPLETATO - Processo completato'
         ],
+        processingWorkflow: [
+          'PROGRAMMAZIONE - Lavorazione programmata per turno',
+          'AVVIO - Inizio lavorazione con assegnazione operatore',
+          'IN_CORSO - Lavorazione in esecuzione',
+          'CONTROLLO_QUALITA - Verifica output e qualità',
+          'COMPLETATA - Lavorazione terminata con successo'
+        ],
+        inventoryMovements: [
+          'CONFERIMENTI - Ingresso materiale da conferitori (+)',
+          'LAVORAZIONI - Utilizzo materiale in produzione (-)',
+          'SPEDIZIONI - Uscita materiale verso clienti (-)',
+          'CORREZIONI - Aggiustamenti e variazioni inventariali (±)'
+        ],
         logisticEntityTypes: [
           'SENDER - Mittenti/Fornitori logistici per trasporti',
           'RECIPIENT - Destinatari/Clienti logistici per consegne',
@@ -348,6 +408,11 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
           'ORGANICO - Frazione organica e biodegradabile',
           'TESSILE - Materiali tessili da recupero',
           'RAEE - Rifiuti da apparecchiature elettriche ed elettroniche'
+        ],
+        processingShifts: [
+          'MORNING - Turno mattutino (06:00-14:00)',
+          'AFTERNOON - Turno pomeridiano (14:00-22:00)',
+          'NIGHT - Turno notturno (22:00-06:00)'
         ],
         deliveryQualities: [
           'OTTIMA - Materiale di alta qualità, pronto per lavorazione',
@@ -381,19 +446,19 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
       roles: {
         USER: {
           description: 'Utente base - Solo lettura',
-          permissions: ['read_deliveries', 'read_reports', 'read_calendar']
+          permissions: ['read_deliveries', 'read_reports', 'read_calendar', 'read_processing', 'read_inventory']
         },
         OPERATOR: {
           description: 'Operatore - Gestione operativa carico e documentazione',
-          permissions: ['read_all', 'create_deliveries', 'update_deliveries', 'validate_deliveries', 'upload_documents']
+          permissions: ['read_all', 'create_deliveries', 'update_deliveries', 'validate_deliveries', 'upload_documents', 'create_processing', 'update_inventory']
         },
         MANAGER: {
           description: 'Manager - Gestione completa workflow e analisi',
-          permissions: ['read_all', 'create_all', 'update_all', 'delete_deliveries', 'manage_contributors', 'view_statistics', 'generate_reports']
+          permissions: ['read_all', 'create_all', 'update_all', 'delete_deliveries', 'manage_contributors', 'view_statistics', 'generate_reports', 'manage_processing', 'manage_inventory']
         },
         ADMIN: {
           description: 'Amministratore - Accesso completo sistema',
-          permissions: ['full_access', 'manage_users', 'manage_system_config', 'delete_all', 'view_audit_logs']
+          permissions: ['full_access', 'manage_users', 'manage_system_config', 'delete_all', 'view_audit_logs', 'delete_processing', 'delete_inventory']
         }
       },
       
@@ -537,7 +602,9 @@ export const setupRoutes = (app: Express, apiPrefix: string): void => {
         `${apiPrefix}/deliveries`,
         `${apiPrefix}/contributors`,
         `${apiPrefix}/material-types`,
-        `${apiPrefix}/calendar`
+        `${apiPrefix}/calendar`,
+        `${apiPrefix}/processing`,
+        `${apiPrefix}/inventory`
       ],
       
       suggestion: `Controlla la documentazione completa all'endpoint ${apiPrefix}/info`
