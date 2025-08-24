@@ -122,6 +122,13 @@ export class OCRController {
       // Estrai dati dal PDF
       const extractedData = await this.ocrService.extractFromPDF(req.file.buffer);
 
+      console.log('🔍 Controller extractFromPDF - Data estratta:');
+      console.log('  - issueDate:', extractedData.issueDate);
+      console.log('  - loadingDate:', extractedData.loadingDate);
+      console.log('  - unloadingDate:', extractedData.unloadingDate);
+      console.log('  - availabilityDate:', extractedData.availabilityDate);
+
+
       // Cerca di trovare clienti e bacini corrispondenti nel database
       const matchedEntities = await this.findMatchingEntities(extractedData);
 

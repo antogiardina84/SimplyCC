@@ -462,20 +462,44 @@ const createLogisticEntityIfNeeded = async (
 const convertToISODate = (date: Date | string | undefined): string | undefined => {
   if (!date) return undefined;
   
-  if (date instanceof Date) {
-    return date.toISOString().split('T')[0];
-  }
+  console.log('🔍 convertToISODate INPUT:', date, 'TYPE:', typeof date);
   
-  if (typeof date === 'string') {
+  let dateObj: Date;
+  
+  if (date instanceof Date) {
+    dateObj = date;
+  } else if (typeof date === 'string') {
     try {
-      return new Date(date).toISOString().split('T')[0];
+      dateObj = new Date(date);
     } catch (e) {
-      console.warn('Errore nella conversione della data:', e);
+      console.warn('Errore nella conversione della data string:', e);
       return undefined;
     }
+  } else {
+    return undefined;
   }
   
-  return undefined;
+  // Controlla se la data è valida
+  if (isNaN(dateObj.getTime())) {
+    console.warn('Data non valida:', date);
+    return undefined;
+  }
+  
+  console.log('🔍 convertToISODate dateObj:', dateObj);
+  console.log('🔍 convertToISODate dateObj.getDate():', dateObj.getDate());
+  console.log('🔍 convertToISODate dateObj.toString():', dateObj.toString());
+  
+  // CORREZIONE: Usa getFullYear, getMonth, getDate invece di toISOString
+  // per evitare problemi di fuso orario
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');  // +1 perché getMonth() è 0-based
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  
+  const result = `${year}-${month}-${day}`;
+  
+  console.log('🔍 convertToISODate OUTPUT:', result);
+  
+  return result;
 };
 
 /**

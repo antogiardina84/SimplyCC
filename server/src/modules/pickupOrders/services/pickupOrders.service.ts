@@ -464,28 +464,35 @@ export const deletePickupOrder = async (id: string) => {
   }
 };
 
-// Funzione utility per il parsing delle date
+// Funzione utility per il parsing delle date - CORREZIONE BACKEND
 function parseDate(date: Date | string): Date {
+  console.log('🔍 Backend parseDate INPUT:', date, 'TYPE:', typeof date);
+  
   if (date instanceof Date) {
-    return date;
+    // Se è già un oggetto Date, assicuriamoci che sia a mezzogiorno per evitare problemi di timezone
+    const fixedDate = new Date(date);
+    fixedDate.setHours(12, 0, 0, 0);
+    
+    console.log('🔍 Backend parseDate (Date input) OUTPUT:', fixedDate);
+    console.log('🔍 Backend parseDate (Date input) OUTPUT toString():', fixedDate.toString());
+    console.log('🔍 Backend parseDate (Date input) OUTPUT getDate():', fixedDate.getDate());
+    
+    return fixedDate;
   }
   
-  // Prova a parsare la data nel formato ISO (es. "2023-11-20T10:00:00Z")
+  // Se è una stringa, parsala correttamente
   const isoDate = new Date(date);
   if (!isNaN(isoDate.getTime())) {
+    // Imposta a mezzogiorno per evitare problemi di fuso orario
+    isoDate.setHours(12, 0, 0, 0);
+    
+    console.log('🔍 Backend parseDate (string input) OUTPUT:', isoDate);
+    console.log('🔍 Backend parseDate (string input) OUTPUT toString():', isoDate.toString());
+    console.log('🔍 Backend parseDate (string input) OUTPUT getDate():', isoDate.getDate());
+    
     return isoDate;
   }
   
-  // Prova a parsare la data in vari formati
-  try {
-    // Formato dd/MM/yyyy
-    return parse(date, 'dd/MM/yyyy', new Date());
-  } catch (e) {
-    try {
-      // Formato的基础上-MM-dd
-      return parse(date, 'yyyy-MM-dd', new Date());
-    } catch (e) {
-      throw new HttpException(400, `Formato data non valido: ${date}. Formati accettati: ISO (es. 2023-11-20T10:00:00Z), dd/MM/yyyy, attraverso-MM-dd.`);
-    }
-  }
+  console.log('🔍 Backend parseDate FAILED:', date);
+  throw new HttpException(400, `Formato data non valido: ${date}`);
 }

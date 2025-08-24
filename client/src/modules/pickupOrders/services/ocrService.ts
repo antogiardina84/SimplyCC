@@ -76,6 +76,7 @@ export interface OCRProcessResponse {
 
 /**
  * Utility function to parse date strings like "28 maggio 2025"
+ * CORREZIONE: Usa setFullYear per evitare problemi di fuso orario
  */
 const parseItalianDate = (dateString: string): Date | undefined => {
   const months: { [key: string]: number } = {
@@ -83,16 +84,48 @@ const parseItalianDate = (dateString: string): Date | undefined => {
     'luglio': 6, 'agosto': 7, 'settembre': 8, 'ottobre': 9, 'novembre': 10, 'dicembre': 11
   };
   
+  console.log('🔍 parseItalianDate INPUT COMPLETO:', JSON.stringify(dateString));
+  console.log('🔍 parseItalianDate INPUT VISUALIZZABILE:', dateString);
+  
   // Handle cases like "28 maggio 2025" or "09 giugno 2025"
   const parts = dateString.match(/(\d{1,2})\s+([a-zA-ZàèéìòùÀÈÉÌÒÙ]+)\s+(\d{4})/);
+  
+  console.log('🔍 Regex match parts:', parts);
+  
   if (parts) {
     const day = parseInt(parts[1], 10);
-    const month = months[parts[2].toLowerCase()];
+    const monthName = parts[2].toLowerCase();
+    const month = months[monthName];
     const year = parseInt(parts[3], 10);
+    
+    console.log('🔍 parseItalianDate DETTAGLI:');
+    console.log('  - Giorno (parts[1]):', parts[1], '→', day);
+    console.log('  - Mese (parts[2]):', parts[2], '→', monthName, '→', month);
+    console.log('  - Anno (parts[3]):', parts[3], '→', year);
+    
     if (month !== undefined) {
-      return new Date(year, month, day);
+      // CORREZIONE: Crea la data a mezzogiorno per evitare problemi di fuso orario
+      const date = new Date();
+      date.setFullYear(year, month, day);
+      date.setHours(12, 0, 0, 0);
+      
+      console.log('🔍 parseItalianDate RISULTATO:');
+      console.log('  - Data creata:', date);
+      console.log('  - toString():', date.toString());
+      console.log('  - toISOString():', date.toISOString());
+      console.log('  - getDate():', date.getDate());
+      console.log('  - getMonth():', date.getMonth(), '(0-based)');
+      console.log('  - getFullYear():', date.getFullYear());
+      
+      return date;
+    } else {
+      console.log('🔍 parseItalianDate ERRORE: mese non trovato nel dizionario');
     }
+  } else {
+    console.log('🔍 parseItalianDate ERRORE: regex non ha fatto match');
   }
+  
+  console.log('🔍 parseItalianDate FALLIMENTO COMPLETO per:', dateString);
   return undefined;
 };
 
@@ -108,9 +141,52 @@ const simulateOCRExtraction = async (file: File): Promise<string> => {
   // In un'implementazione reale, qui faresti l'upload del file a un servizio OCR
   const fileName = file.name.toLowerCase();
   
+  console.log('🔍 OCR SIMULATION - File name:', fileName);
+  
+  // CORREZIONE: Aggiungi il contenuto reale del PDF caricato dall'utente
+  if (fileName.includes('92551338731')) {
+    console.log('🔍 OCR SIMULATION - Usando contenuto PDF reale');
+    return `
+corepla ICT 2.0.0 PROD 901653702
+N°: 92551338731
+BUONO DI RITIRO
+Data emissione buono 22 agosto 2025
+Trasportatore
+Mittente
+Destinatario
+Distanza Chilometrica
+Note
+Data Carico / Scarico tra
+Tipo e codice prodotto
+DESTINATARIO
+-----
+ milano MI
+Tel: - Fax: -
+Email: ND
+CC DOMUS RICYCLE
+ZONA INDUSTRIALE - STATALE PRIMOSOLE 13 
+95121 CATANIA CT
+Tel: Fax:
+Email: INFO@DOMUSRICYCLE.COM
+CSS ECOREK 2
+C.da Tonnarella
+90018 TERMINI IMERESE PA
+Tel: 0918140918 Fax:
+Email: centrorecupero@ecorek.com
+P.Iva: 06256750826
+174,503
+'CIT'
+28 agosto 2025 / 08 settembre 2025
+Bacino Tipo Flusso Descrizione
+Lista bacini
+2002048 A COMUNE DI SIRACUSA
+Data Richiesta 22 agosto 2025 Data Disponibilità 27 agosto 2025
+`;
+  }
+  
   // Simuliamo diversi contenuti basati sul nome del file o altre caratteristiche
   if (fileName.includes('92551111774') || fileName.includes('acireale')) {
-    // Contenuto del PDF mostrato dall'utente
+    console.log('🔍 OCR SIMULATION - Usando contenuto PDF Acireale');
     return `
 BUONO DI RITIRO
 N°: 92551111774
@@ -157,6 +233,7 @@ Bacino Tipo Flusso Descrizione
   }
   
   // Contenuto di default (PDF originale)
+  console.log('🔍 OCR SIMULATION - Usando contenuto PDF default');
   return `
 BUONO DI RITIRO
 N°: 92551970297
@@ -206,6 +283,10 @@ Bacino Tipo Flusso Descrizione
  * Processa il testo estratto dal PDF e ne estrae i dati strutturati
  */
 const processExtractedText = (fullContent: string): OCRExtractionResponse => {
+  console.log('🔍 === TESTO COMPLETO ESTRATTO DAL PDF ===');
+  console.log(fullContent);
+  console.log('🔍 === FINE TESTO ESTRATTO ===');
+  
   const extractedData: ExtractedPickupOrderData = {
     orderNumber: '',
     issueDate: new Date(),
@@ -241,6 +322,7 @@ const processExtractedText = (fullContent: string): OCRExtractionResponse => {
     const match = fullContent.match(pattern);
     if (match && match[1]) {
       extractedData.orderNumber = match[1].trim();
+      console.log('🔍 Numero buono trovato:', extractedData.orderNumber);
       break;
     }
   }
@@ -260,6 +342,7 @@ const processExtractedText = (fullContent: string): OCRExtractionResponse => {
   for (const pattern of issueDatePatterns) {
     const match = fullContent.match(pattern);
     if (match && match[1]) {
+      console.log('🔍 Data emissione trovata nel testo:', match[1]);
       const parsedDate = parseItalianDate(match[1].trim());
       if (parsedDate) {
         extractedData.issueDate = parsedDate;
@@ -383,17 +466,35 @@ const processExtractedText = (fullContent: string): OCRExtractionResponse => {
     }
   }
 
-  // Estrazione Date Carico/Scarico
+  // ESTRAZIONE DATE CARICO/SCARICO - SEZIONE CRITICA CON DEBUG
   const loadingUnloadingPatterns = [
     /Data Carico\s*\/\s*Scarico tra\s*(\d{1,2}\s+\w+\s+\d{4})\s*\/\s*(\d{1,2}\s+\w+\s+\d{4})/i,
     /(\d{1,2}\s+\w+\s+\d{4})\s*\/\s*(\d{1,2}\s+\w+\s+\d{4})/
   ];
   
+  console.log('🔍 Cercando pattern date carico/scarico...');
+  
   for (const pattern of loadingUnloadingPatterns) {
+    console.log('🔍 Testando pattern:', pattern);
     const match = fullContent.match(pattern);
+    console.log('🔍 Risultato match:', match);
+    
     if (match && match[1] && match[2]) {
-      extractedData.loadingDate = parseItalianDate(match[1].trim());
-      extractedData.unloadingDate = parseItalianDate(match[2].trim());
+      console.log('🔍 DATE TROVATE NEL TESTO:');
+      console.log('  - Data carico (match[1]):', match[1]);
+      console.log('  - Data scarico (match[2]):', match[2]);
+      
+      const loadingDate = parseItalianDate(match[1].trim());
+      const unloadingDate = parseItalianDate(match[2].trim());
+      
+      console.log('🔍 DATE DOPO PARSING:');
+      console.log('  - Data carico parsata:', loadingDate);
+      console.log('  - Data scarico parsata:', unloadingDate);
+      console.log('  - Data carico getDate():', loadingDate?.getDate());
+      console.log('  - Data scarico getDate():', unloadingDate?.getDate());
+      
+      extractedData.loadingDate = loadingDate;
+      extractedData.unloadingDate = unloadingDate;
       break;
     }
   }
@@ -407,6 +508,7 @@ const processExtractedText = (fullContent: string): OCRExtractionResponse => {
   for (const pattern of availabilityPatterns) {
     const match = fullContent.match(pattern);
     if (match && match[1]) {
+      console.log('🔍 Data disponibilità trovata:', match[1]);
       extractedData.availabilityDate = parseItalianDate(match[1].trim());
       break;
     }
@@ -437,6 +539,18 @@ const processExtractedText = (fullContent: string): OCRExtractionResponse => {
   extractedData.confidence = Math.max(0, overallConfidence);
   qualityScore = Math.max(0, qualityScore - (needsReview.length * 5));
 
+  console.log('🔍 DATI ESTRATTI FINALI:', {
+    orderNumber: extractedData.orderNumber,
+    issueDate: extractedData.issueDate,
+    loadingDate: extractedData.loadingDate,
+    unloadingDate: extractedData.unloadingDate,
+    availabilityDate: extractedData.availabilityDate,
+    senderName: extractedData.senderName,
+    recipientName: extractedData.recipientName,
+    basinCode: extractedData.basinCode,
+    confidence: extractedData.confidence
+  });
+
   // Simulazione suggerimenti entità
   const simulatedSenders: MatchedEntity[] = [
     { id: 's_domus', name: 'CC DOMUS RICYCLE', similarity: extractedData.senderName.includes('DOMUS') ? 1.0 : 0.7 },
@@ -445,6 +559,7 @@ const processExtractedText = (fullContent: string): OCRExtractionResponse => {
   
   const simulatedRecipients: MatchedEntity[] = [
     { id: 'r_ecologistic', name: 'CSS ECOLOGISTIC SPA', similarity: extractedData.recipientName.includes('ECOLOGISTIC') ? 1.0 : 0.7 },
+    { id: 'r_ecorek', name: 'CSS ECOREK 2', similarity: extractedData.recipientName.includes('ECOREK') ? 1.0 : 0.7 },
     { id: 'r_another', name: 'Altro Destinatario S.r.l.', similarity: 0.3 },
   ];
   

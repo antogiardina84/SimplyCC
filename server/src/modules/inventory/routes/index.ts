@@ -1,36 +1,167 @@
-// server/src/modules/inventory/routes/index.ts
+// server/src/modules/inventory/routes/index.ts - VERSIONE INTEGRATA
 
 import { Router } from 'express';
-import { authMiddleware } from '../../../core/middleware/auth.middleware';
 import * as inventoryController from '../controllers';
+import { authMiddleware } from '../../../core/middleware/auth.middleware';
 
 const router = Router();
 
-// Applica il middleware di autenticazione a tutte le rotte
+// Middleware di autenticazione per tutte le routes
 router.use(authMiddleware);
 
-// GET /api/inventory - Ottieni tutti i movimenti di giacenza (con filtri opzionali)
+// ================================
+// ROUTES CRUD STANDARD
+// ================================
+
+/**
+ * @route GET /inventory
+ * @desc Ottieni tutti i movimenti di giacenza con filtri opzionali
+ * @query startDate, endDate, materialTypeId
+ */
 router.get('/', inventoryController.getAllInventory);
 
-// GET /api/inventory/stats - Ottieni statistiche delle giacenze
-router.get('/stats', inventoryController.getInventoryStats);
-
-// GET /api/inventory/report - Genera report giacenze
-router.get('/report', inventoryController.getInventoryReport);
-
-// GET /api/inventory/latest/:materialType/:reference - Ottieni ultima giacenza per materiale
-router.get('/latest/:materialType/:reference', inventoryController.getLatestStockByMaterial);
-
-// GET /api/inventory/:id - Ottieni un movimento specifico
+/**
+ * @route GET /inventory/:id
+ * @desc Ottieni movimento di giacenza per ID
+ */
 router.get('/:id', inventoryController.getInventoryById);
 
-// POST /api/inventory - Crea un nuovo movimento di giacenza
+/**
+ * @route POST /inventory
+ * @desc Crea nuovo movimento di giacenza (con calcolo automatico)
+ */
 router.post('/', inventoryController.createInventory);
 
-// PUT /api/inventory/:id - Aggiorna un movimento di giacenza
+/**
+ * @route PUT /inventory/:id
+ * @desc Aggiorna movimento di giacenza
+ */
 router.put('/:id', inventoryController.updateInventory);
 
-// DELETE /api/inventory/:id - Elimina un movimento di giacenza
+/**
+ * @route DELETE /inventory/:id
+ * @desc Elimina movimento di giacenza
+ */
 router.delete('/:id', inventoryController.deleteInventory);
+
+// ================================
+// ROUTES PER CALCOLO AUTOMATICO
+// ================================
+
+/**
+ * @route GET /inventory/calculate/movements/:materialTypeId/:date
+ * @desc Calcola movimenti automatici per materiale e data
+ * @params materialTypeId - ID del tipo materiale
+ * @params date - Data in formato YYYY-MM-DD
+ */
+router.get('/calculate/movements/:materialTypeId/:date', inventoryController.calculateAutomaticMovements);
+
+/**
+ * @route GET /inventory/calculate/stock/:materialTypeId/:date
+ * @desc Calcola giacenza di un materiale a una data specifica
+ * @params materialTypeId - ID del tipo materiale
+ * @params date - Data in formato YYYY-MM-DD
+ */
+router.get('/calculate/stock/:materialTypeId/:date', inventoryController.calculateStockAtDate);
+
+/**
+ * @route POST /inventory/recalculate/:materialTypeId
+ * @desc Ricalcola tutte le giacenze per un materiale
+ * @params materialTypeId - ID del tipo materiale
+ */
+router.post('/recalculate/:materialTypeId', inventoryController.recalculateInventoryForMaterial);
+
+/**
+ * @route POST /inventory/auto-create/:date
+ * @desc Crea automaticamente movimenti per tutti i materiali di una data
+ * @params date - Data in formato YYYY-MM-DD
+ */
+router.post('/auto-create/:date', inventoryController.autoCreateInventoryForDate);
+
+// ================================
+// ROUTES PER DISPONIBILITÀ STOCK
+// ================================
+
+/**
+ * @route GET /inventory/stock/availability
+ * @desc Ottieni disponibilità stock corrente per tutti i materiali
+ */
+router.get('/stock/availability', inventoryController.getCurrentStockAvailability);
+
+/**
+ * @route GET /inventory/stock/latest/:materialTypeId
+ * @desc Ottieni ultima giacenza per materiale
+ * @params materialTypeId - ID del tipo materiale
+ */
+router.get('/stock/latest/:materialTypeId', inventoryController.getLatestStockByMaterial);
+
+// ================================
+// ROUTES PER STATISTICHE E REPORT
+// ================================
+
+/**
+ * @route GET /inventory/stats
+ * @desc Ottieni statistiche giacenze
+ */
+router.get('/stats', inventoryController.getInventoryStats);
+
+/**
+ * @route GET /inventory/report
+ * @desc Genera report giacenze
+ * @query startDate, endDate, materialTypeId
+ */
+router.get('/report', inventoryController.getInventoryReport);
+
+/**
+ * @route GET /inventory/dashboard
+ * @desc Ottieni dati per dashboard giacenze
+ */
+router.get('/dashboard', inventoryController.getInventoryDashboard);
+
+// ================================
+// ROUTES LEGACY (COMPATIBILITÀ)
+// ================================
+
+/**
+ * @route GET /inventory/latest/:materialType/:reference
+ * @desc [DEPRECATED] Ottieni ultima giacenza per materiale (legacy)
+ * @note Usa /stock/latest/:materialTypeId invece
+ */
+router.get('/latest/:materialType/:reference', async (req, res) => {
+  try {
+    const { materialType, reference } = req.params;
+    
+    // Trova materialTypeId dal codice legacy
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    const materialTypeRecord = await prisma.materialType.findFirst({
+      where: {
+        OR: [
+          { code: materialType },
+          { reference: reference },
+        ],
+      },
+    });
+
+    if (!materialTypeRecord) {
+      res.status(404).json({
+        success: false,
+        message: 'Tipo materiale non trovato',
+      });
+      return;
+    }
+
+    // Usa la nuova API
+    const latestStock = await inventoryController.getLatestStockByMaterial(materialTypeRecord.id);
+    res.json(latestStock);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Errore nella compatibilità legacy',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
 
 export default router;
