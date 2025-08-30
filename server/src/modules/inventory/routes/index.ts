@@ -1,7 +1,7 @@
 // server/src/modules/inventory/routes/index.ts - VERSIONE INTEGRATA
-
 import { Router } from 'express';
 import * as inventoryController from '../controllers';
+import * as inventoryService from '../services/inventory.service';
 import { authMiddleware } from '../../../core/middleware/auth.middleware';
 
 const router = Router();
@@ -125,7 +125,6 @@ router.get('/dashboard', inventoryController.getInventoryDashboard);
 /**
  * @route GET /inventory/latest/:materialType/:reference
  * @desc [DEPRECATED] Ottieni ultima giacenza per materiale (legacy)
- * @note Usa /stock/latest/:materialTypeId invece
  */
 router.get('/latest/:materialType/:reference', async (req, res) => {
   try {
@@ -152,9 +151,13 @@ router.get('/latest/:materialType/:reference', async (req, res) => {
       return;
     }
 
-    // Usa la nuova API
-    const latestStock = await inventoryController.getLatestStockByMaterial(materialTypeRecord.id);
-    res.json(latestStock);
+    // Chiama direttamente il service invece del controller
+    const latestStock = await inventoryService.findLatestInventoryByMaterialType(materialTypeRecord.id);
+    
+    res.status(200).json({
+      success: true,
+      data: latestStock,
+    });
   } catch (error) {
     res.status(500).json({
       success: false,
