@@ -334,14 +334,15 @@ export const updateMaterialType = async (id: string, data: UpdateMaterialTypeDat
       throw new HttpException(400, 'Impossibile assegnare un parent a una tipologia che ha già dei figli');
     }
 
-    // Prepara dati per l'update
-    const updateData: Partial<CreateMaterialTypeData> & { isActive?: boolean; usageContext?: string } = { ...data };
+    // Prepara dati per l'update - usa any per evitare conflitti di tipo
+    const updateData: any = { ...data };
     
     if (updateData.code) {
       updateData.code = updateData.code.toUpperCase();
     }
     
-    if (updateData.usageContext) {
+    // Converti usageContext array a JSON string per il database
+    if (updateData.usageContext && Array.isArray(updateData.usageContext)) {
       updateData.usageContext = JSON.stringify(updateData.usageContext);
     }
 
