@@ -3,7 +3,7 @@
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
-const API_URL = 'http://localhost:4000/api';
+const API_URL = '/api';
 
 // Funzione per convertire Date in string ISO locale (senza timezone shift)
 const convertDateToLocalISO = (date: Date): string => {
