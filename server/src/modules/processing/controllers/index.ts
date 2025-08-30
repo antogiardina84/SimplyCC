@@ -1,7 +1,7 @@
 // server/src/modules/processing/controllers/index.ts
 
 import { Request, Response } from 'express';
-import * as processingService from '../services/processing.service';
+import processingService from '../services/processing.service';
 
 export const getAllProcessing = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -11,16 +11,16 @@ export const getAllProcessing = async (req: Request, res: Response): Promise<voi
 
     if (startDate && endDate) {
       // Filtra per range di date
-      processing = await processingService.findProcessingByDateRange(
-        new Date(startDate as string),
-        new Date(endDate as string)
-      );
+      processing = await processingService.findAll({
+        startDate: new Date(startDate as string),
+        endDate: new Date(endDate as string)
+      });
     } else if (operatorId) {
       // Filtra per operatore
-      processing = await processingService.findProcessingByOperator(operatorId as string);
+      processing = await processingService.findAll({ operatorId: operatorId as string });
     } else {
       // Tutti i processing
-      processing = await processingService.findAllProcessing();
+      processing = await processingService.findAll({});
     }
 
     res.status(200).json({
@@ -40,23 +40,22 @@ export const getAllProcessing = async (req: Request, res: Response): Promise<voi
 export const getProcessingById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const processing = await processingService.findProcessingById(id);
+    const processing = await processingService.findById(id);
+
+    if (!processing) {
+      res.status(404).json({
+        success: false,
+        message: 'Lavorazione non trovata',
+      });
+      return;
+    }
 
     res.status(200).json({
       success: true,
       data: processing,
     });
   } catch (error) {
-    console.error('Error getting processing by id:', error);
-    
-    if (error instanceof Error && error.message === 'Lavorazione non trovata') {
-      res.status(404).json({
-        success: false,
-        message: error.message,
-      });
-      return;
-    }
-
+    console.error('Error getting processing by ID:', error);
     res.status(500).json({
       success: false,
       message: 'Errore durante il recupero della lavorazione',
@@ -67,26 +66,15 @@ export const getProcessingById = async (req: Request, res: Response): Promise<vo
 
 export const createProcessing = async (req: Request, res: Response): Promise<void> => {
   try {
-    const processing = await processingService.createProcessing(req.body);
+    const newProcessing = await processingService.create(req.body);
 
     res.status(201).json({
       success: true,
       message: 'Lavorazione creata con successo',
-      data: processing,
+      data: newProcessing,
     });
   } catch (error) {
     console.error('Error creating processing:', error);
-    
-    if (error instanceof Error && (
-      error.message === 'Operatore non trovato'
-    )) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-      return;
-    }
-
     res.status(500).json({
       success: false,
       message: 'Errore durante la creazione della lavorazione',
@@ -98,21 +86,20 @@ export const createProcessing = async (req: Request, res: Response): Promise<voi
 export const updateProcessing = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const processing = await processingService.updateProcessing(id, req.body);
+    const updateData = req.body;
+
+    const updatedProcessing = await processingService.update(id, updateData);
 
     res.status(200).json({
       success: true,
       message: 'Lavorazione aggiornata con successo',
-      data: processing,
+      data: updatedProcessing,
     });
   } catch (error) {
     console.error('Error updating processing:', error);
     
-    if (error instanceof Error && (
-      error.message === 'Lavorazione non trovata' ||
-      error.message === 'Operatore non trovato'
-    )) {
-      res.status(error.message === 'Lavorazione non trovata' ? 404 : 400).json({
+    if (error instanceof Error && error.message === 'Sessione di lavorazione non trovata') {
+      res.status(404).json({
         success: false,
         message: error.message,
       });
@@ -130,16 +117,16 @@ export const updateProcessing = async (req: Request, res: Response): Promise<voi
 export const deleteProcessing = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const result = await processingService.deleteProcessing(id);
+    await processingService.delete(id);
 
     res.status(200).json({
       success: true,
-      message: result.message,
+      message: 'Lavorazione eliminata con successo',
     });
   } catch (error) {
     console.error('Error deleting processing:', error);
     
-    if (error instanceof Error && error.message === 'Lavorazione non trovata') {
+    if (error instanceof Error && error.message === 'Sessione di lavorazione non trovata') {
       res.status(404).json({
         success: false,
         message: error.message,
@@ -157,7 +144,7 @@ export const deleteProcessing = async (req: Request, res: Response): Promise<voi
 
 export const getProcessingStats = async (req: Request, res: Response): Promise<void> => {
   try {
-    const stats = await processingService.getProcessingStats();
+    const stats = await processingService.getDashboardStats();
 
     res.status(200).json({
       success: true,
@@ -167,7 +154,7 @@ export const getProcessingStats = async (req: Request, res: Response): Promise<v
     console.error('Error getting processing stats:', error);
     res.status(500).json({
       success: false,
-      message: 'Errore durante il recupero delle statistiche',
+      message: 'Errore durante il recupero delle statistiche di lavorazione',
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }

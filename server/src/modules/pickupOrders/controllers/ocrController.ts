@@ -80,6 +80,13 @@ interface MatchedEntities {
   };
 }
 
+// Nuova interfaccia che estende l'originale e aggiunge le proprietà mancanti
+interface ExtendedCreatePickupOrderData extends pickupOrderService.CreatePickupOrderData {
+  senderId: string;
+  recipientId: string;
+  basinId: string;
+}
+
 // Configurazione multer per upload file
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -516,18 +523,18 @@ export class OCRController {
   /**
    * Prepara i dati per la creazione del buono di ritiro
    */
-  private async preparePickupOrderData(extractedData: ExtractedPickupOrderData, autoCreate: boolean): Promise<pickupOrderService.CreatePickupOrderData> {
-    const pickupOrderData: pickupOrderService.CreatePickupOrderData = {
+  private async preparePickupOrderData(extractedData: ExtractedPickupOrderData, autoCreate: boolean): Promise<ExtendedCreatePickupOrderData> {
+    const pickupOrderData: ExtendedCreatePickupOrderData = {
       orderNumber: extractedData.orderNumber,
       issueDate: extractedData.issueDate,
       scheduledDate: extractedData.availabilityDate,
       flowType: extractedData.flowType || 'A',
       distanceKm: extractedData.distanceKm,
-      status: 'PENDING',
+      status: 'PENDING' as pickupOrderService.PickupOrderStatus,
       notes: `Creato tramite OCR - Confidenza: ${extractedData.confidence}%`,
-      senderId: '', // Sarà risolto dopo
-      recipientId: '', // Sarà risolto dopo
-      basinId: '', // Sarà risolto dopo
+      senderId: '',
+      recipientId: '',
+      basinId: '',
     };
 
     // Gestisci mittente
