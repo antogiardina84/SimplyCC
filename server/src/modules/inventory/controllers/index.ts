@@ -1,7 +1,7 @@
 // server/src/modules/inventory/controllers/index.ts - VERSIONE INTEGRATA
-
-// Aggiungi import di prisma all'inizio del file
+import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import * as inventoryService from '../services/inventory.service';
 
 const prisma = new PrismaClient();
 
