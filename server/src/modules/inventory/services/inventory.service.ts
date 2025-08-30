@@ -327,7 +327,6 @@ export const createInventory = async (data: CreateInventoryData) => {
         adjustments,
         finalStock,
         notes: data.notes,
-        isAutoCalculated: !data.deliveries && !data.processing && !data.shipments,
       },
       include: inventoryInclude,
     });
