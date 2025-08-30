@@ -47,6 +47,7 @@ const validateStatusTransition = (currentStatus: string, newStatus: PickupOrderS
     [PickupOrderStatus.PROGRAMMATO]: [
       PickupOrderStatus.IN_EVASIONE, 
       PickupOrderStatus.DA_EVADERE,  // ← REVERSIBILE
+      PickupOrderStatus.IN_CARICO,
       PickupOrderStatus.CANCELLED
     ],
     [PickupOrderStatus.IN_EVASIONE]: [
