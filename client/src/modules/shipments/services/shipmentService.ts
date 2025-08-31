@@ -155,19 +155,47 @@ export const getShipments = async (params: {
   status?: string;
 }): Promise<Shipment[]> => {
   try {
-    // CAMBIAMENTO: Ora prendiamo direttamente i pickup orders con spedizioni programmate
+    // RIPRISTINATO: Torna alla chiamata originale che funzionava
     const response = await api.get('/pickup-orders', { params });
     
     // Trasforma i pickup orders in formato spedizione
     const shipments: Shipment[] = response.data
       .filter((order: any) => {
+        // DEBUG: Log di ogni ordine
+        console.log('🔍 Controllo ordine:', {
+          orderNumber: order.orderNumber,
+          status: order.status,
+          scheduledDate: order.scheduledDate,
+          hasScheduledDate: !!order.scheduledDate,
+          startDate: params.startDate,
+          endDate: params.endDate
+        });
+        
         // Include solo ordini con data programmazione
         const hasScheduledDate = order.scheduledDate;
-        const isInDateRange = !params.startDate || !params.endDate || (
-          order.scheduledDate >= params.startDate && 
-          order.scheduledDate <= params.endDate
-        );
+        
+        // CORREZIONE: Confronto corretto delle date
+        let isInDateRange = true;
+        if (params.startDate && params.endDate && order.scheduledDate) {
+          const orderDate = new Date(order.scheduledDate);
+          const startDate = new Date(params.startDate);
+          const endDate = new Date(params.endDate);
+          
+          // Imposta tutti gli orari a mezzanotte per confrontare solo le date
+          orderDate.setHours(0, 0, 0, 0);
+          startDate.setHours(0, 0, 0, 0);
+          endDate.setHours(23, 59, 59, 999);
+          
+          isInDateRange = orderDate >= startDate && orderDate <= endDate;
+        }
         const matchesStatus = !params.status || order.status === params.status;
+        
+        console.log('🎯 Risultato filtro:', {
+          hasScheduledDate,
+          isInDateRange,
+          matchesStatus,
+          passed: hasScheduledDate && isInDateRange && matchesStatus
+        });
         
         return hasScheduledDate && isInDateRange && matchesStatus;
       })
