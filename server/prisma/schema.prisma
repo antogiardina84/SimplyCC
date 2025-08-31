@@ -32,6 +32,9 @@ model User {
   // Validazioni conferimenti
   validatedDeliveries Delivery[] @relation("DeliveryValidator")
   createdDeliveries   Delivery[] @relation("DeliveryCreator")
+  
+  // AGGIUNTO: Relazione per file caricati
+  uploadedFiles UploadedFile[]
 }
 
 // ================================
@@ -77,7 +80,7 @@ model Basin {
 }
 
 // ================================
-// ENTITÀ LOGISTICHE (Separate da Clienti)
+// ENTITÃ LOGISTICHE (Separate da Clienti)
 // ================================
 
 model LogisticEntity {
@@ -181,7 +184,32 @@ model MaterialType {
 }
 
 // ================================
-// BUONI DI RITIRO (Esteso con Workflow)
+// GESTIONE FILE UPLOAD (NUOVO)
+// ================================
+
+model UploadedFile {
+  id           String   @id @default(uuid())
+  filename     String   @unique
+  originalName String   @map("original_name")
+  mimeType     String   @map("mime_type")
+  size         Int
+  uploadPath   String   @map("upload_path")
+  uploadedBy   String   @map("uploaded_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  fileType     String   @default("loading-photo") @map("file_type")
+  metadata     Json?
+
+  // Relazioni
+  uploader User @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@map("uploaded_files")
+  @@index([fileType])
+  @@index([uploadedBy])
+  @@index([createdAt])
+}
+
+// ================================
+// BUONI DI RITIRO (Esteso con Workflow e Foto)
 // ================================
 
 model PickupOrder {
@@ -231,11 +259,12 @@ model PickupOrder {
   assignedOperator   User?   @relation(name: "OperatorAssigned", fields: [assignedOperatorId], references: [id])
   operatorAssignedAt DateTime?
   
-  // Documenti e Media
+  // Documenti e Media (AGGIORNATO per foto)
   notes            String?
   documents        String?   // JSON per documenti vari
-  loadingPhotos    String?   // JSON per foto carico
-  loadingVideos    String?   // JSON per video carico
+  loadingPhotos    String?   @map("loading_photos") // URLs foto carico (separati da virgola)
+  loadingPhotoCount Int?     @default(0) @map("loading_photo_count") // Numero foto
+  loadingVideos    String?   @map("loading_videos") // JSON per video carico
   
   // Gestione Rifiuti/Respinte
   isRejected       Boolean   @default(false)
@@ -287,7 +316,7 @@ model Shipment {
 }
 
 // ================================
-// ATTIVITÀ OPERATORI
+// ATTIVITÀ OPERATORI (AGGIORNATO con foto)
 // ================================
 
 model OperatorActivity {
@@ -300,9 +329,11 @@ model OperatorActivity {
   activityType    String   // ASSIGNED, STARTED, PHOTOS_UPLOADED, COMPLETED, etc.
   description     String?
   
-  // Media allegati
+  // Media allegati (AGGIORNATO)
   photos          String?  // JSON array di path foto
   videos          String?  // JSON array di path video
+  photoCount      Int?     // Numero foto associate
+  photoUrls       String?  @map("photo_urls") // URLs foto per questa attività
   
   // Dati specifici attività
   packageCount    Int?     // Numero colli (se applicabile)
@@ -326,6 +357,7 @@ model PickupOrderStatusHistory {
   changedBy       String?  // ID utente che ha fatto il cambio
   reason          String?  // Motivo del cambio
   notes           String?
+  metadata        Json?    // Dati aggiuntivi (es: numero foto caricate)
 }
 
 // ================================

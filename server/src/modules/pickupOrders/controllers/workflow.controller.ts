@@ -197,14 +197,29 @@ export const assignOperator = async (req: AuthRequest, res: Response, next: Next
 /**
  * Completa carico (IN_CARICO -> CARICATO)
  */
+/**
+ * Completa carico (IN_CARICO -> CARICATO) con supporto foto
+ */
 export const completeLoading = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const { packageCount, notes } = req.body;
+    const { packageCount, notes, photos, photoCount } = req.body;
 
     if (!req.user) {
       throw new HttpException(401, 'Utente non autenticato');
     }
+
+    // Validazione dati
+    if (packageCount !== undefined && (isNaN(packageCount) || packageCount < 0)) {
+      throw new HttpException(400, 'Numero colli non valido');
+    }
+
+    console.log(`📦 Completamento carico ordine ${id}:`, {
+      packageCount,
+      photoCount: photoCount || 0,
+      photosProvided: !!photos,
+      operatorId: req.user.id
+    });
 
     const result = await workflowService.changePickupOrderStatus({
       pickupOrderId: id,
@@ -214,16 +229,20 @@ export const completeLoading = async (req: AuthRequest, res: Response, next: Nex
       reason: 'Carico completato dall\'operatore',
       notes,
       additionalData: {
-        packageCount: packageCount ? parseInt(packageCount) : undefined
+        packageCount: packageCount ? parseInt(packageCount) : undefined,
+        loadingPhotos: photos,
+        photoCount: photoCount ? parseInt(photoCount) : 0,
+        completedAt: new Date().toISOString()
       }
     });
 
     res.status(200).json({
       success: true,
-      message: 'Carico completato con successo',
+      message: `Carico completato con successo${photoCount ? ` (${photoCount} foto allegate)` : ''}`,
       data: result
     });
   } catch (error) {
+    console.error('❌ Errore in completeLoading:', error);
     next(error);
   }
 };

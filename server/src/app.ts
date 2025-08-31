@@ -5,8 +5,11 @@ import helmet from 'helmet';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import morgan from 'morgan';
+import path from 'path';
 import { errorHandler } from './core/middleware/error.middleware';
 import { setupRoutes } from './core/setup/routes';
+import { uploadRoutes } from './modules/uploads/routes';
+import { uploadErrorHandler } from './core/middleware/upload.middleware';
 
 // Carica le variabili d'ambiente
 dotenv.config();
@@ -51,6 +54,12 @@ app.use(cors(corsOptions));
 // Parsing del body
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve files statici dalla directory uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Routes
+app.use('/api/uploads', uploadRoutes);
 
 // Logging delle richieste
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
@@ -118,6 +127,9 @@ app.use('*', (req, res) => {
 
 // Middleware di gestione errori (deve essere l'ultimo)
 app.use(errorHandler);
+
+// Middleware per errori upload (deve essere dopo le routes)
+app.use(uploadErrorHandler);
 
 // Gestione graceful shutdown
 process.on('SIGTERM', () => {

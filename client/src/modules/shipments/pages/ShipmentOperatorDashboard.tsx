@@ -1,4 +1,4 @@
-// client/src/modules/shipments/pages/ShipmentOperatorDashboard.tsx - VERSIONE FINALE CORRETTA
+// client/src/modules/shipments/pages/ShipmentOperatorDashboard.tsx - AGGIORNATO CON FOTO
 
 import { useState, useEffect, useRef } from 'react';
 import { 
@@ -37,6 +37,7 @@ import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 import api from '../../../core/services/api';
 import * as shipmentService from '../services/shipmentService';
+import PhotoCaptureComponent from '../components/PhotoCaptureComponent';
 
 interface MyOrder {
   id: string;
@@ -62,6 +63,13 @@ interface MyOrder {
   specialInstructions?: string;
 }
 
+interface Photo {
+  id: string;
+  file: File;
+  preview: string;
+  timestamp: Date;
+}
+
 function ShipmentOperatorDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +81,9 @@ function ShipmentOperatorDashboard() {
   const [selectedOrder, setSelectedOrder] = useState<MyOrder | null>(null);
   const [loadedPackages, setLoadedPackages] = useState<string>('');
   const [loadingNotes, setLoadingNotes] = useState<string>('');
+  const [loadingPhotos, setLoadingPhotos] = useState<Photo[]>([]);
   const [completing, setCompleting] = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -81,10 +91,8 @@ function ShipmentOperatorDashboard() {
     setLoading(true);
     setError(null);
     try {
-      // Usa l'endpoint corretto del backend
       const response = await api.get('/shipments/operator-dashboard');
       
-      // Filtra per diversi stati
       const assigned = response.data.filter(
         (order: MyOrder) => order.status === 'PROGRAMMATO'
       );
@@ -116,7 +124,6 @@ function ShipmentOperatorDashboard() {
 
   useEffect(() => {
     fetchData();
-    // Refresh automatico ogni 30 secondi
     fetchTimeoutRef.current = setInterval(fetchData, 30000); 
 
     return () => {
@@ -126,22 +133,45 @@ function ShipmentOperatorDashboard() {
     };
   }, []);
 
-  // CORREZIONE VERA: Usa l'endpoint del workflow dei pickup-orders
   const handleTakeCharge = async (orderId: string) => {
     try {
-      // ENDPOINT CORRETTO: pickup-orders workflow per auto-assegnazione operatore
       await api.post(`/pickup-orders/${orderId}/workflow/assign-operator`, {
-        // L'operatorId viene auto-assegnato dal backend (operatore corrente)
         notes: 'Presa in carico da dashboard operatore'
       });
-      fetchData(); // Refresh data
+      fetchData();
     } catch (err: any) {
       console.error('Errore nella presa in carico:', err);
       alert(`Errore nella presa in carico: ${err.response?.data?.message || 'Si prega di riprovare.'}`);
     }
   };
 
-  // CORREZIONE VERA: Usa l'endpoint del workflow dei pickup-orders
+  // Upload delle foto al server
+  const uploadPhotos = async (photos: Photo[]): Promise<string[]> => {
+    const uploadedUrls: string[] = [];
+    
+    for (const photo of photos) {
+      const formData = new FormData();
+      formData.append('photo', photo.file);
+      formData.append('type', 'loading-photo');
+      formData.append('timestamp', photo.timestamp.toISOString());
+      
+      try {
+        const response = await api.post('/uploads/photo', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        
+        uploadedUrls.push(response.data.url);
+      } catch (error) {
+        console.error('Errore upload foto:', error);
+        throw new Error(`Errore nel caricamento della foto ${photo.id}`);
+      }
+    }
+    
+    return uploadedUrls;
+  };
+
   const handleCompleteLoading = async () => {
     if (!selectedOrder) return;
 
@@ -151,171 +181,260 @@ function ShipmentOperatorDashboard() {
     }
 
     setCompleting(true);
+    setUploadingPhotos(true);
+    
     try {
-      // ENDPOINT CORRETTO: pickup-orders workflow per completare il carico
+      // Upload foto se presenti
+      let photoUrls: string[] = [];
+      if (loadingPhotos.length > 0) {
+        photoUrls = await uploadPhotos(loadingPhotos);
+      }
+      
+      setUploadingPhotos(false);
+
+      // Completa il carico con le foto
       await api.post(`/pickup-orders/${selectedOrder.id}/workflow/complete-loading`, {
         packageCount: parseFloat(loadedPackages),
         notes: loadingNotes,
+        photos: photoUrls.join(','), // Salva URLs separate da virgola
+        photoCount: loadingPhotos.length
       });
+      
+      // Reset e chiudi dialog
       setCompleteDialog(false);
       setLoadedPackages('');
       setLoadingNotes('');
+      setLoadingPhotos([]);
       setSelectedOrder(null);
-      fetchData(); // Refresh data
+      fetchData();
+      
+      alert(`Carico completato con successo! ${loadingPhotos.length} foto caricate.`);
+      
     } catch (err: any) {
       console.error('Errore nel completamento del carico:', err);
       alert(`Errore nel completamento del carico: ${err.response?.data?.message || 'Si prega di riprovare.'}`);
     } finally {
       setCompleting(false);
+      setUploadingPhotos(false);
     }
   };
 
   const openCompleteDialog = (order: MyOrder) => {
     setSelectedOrder(order);
     setLoadedPackages(order.expectedQuantity ? order.expectedQuantity.toString() : '');
-    setLoadingNotes(order.specialInstructions || '');
+    setLoadingNotes('');
+    setLoadingPhotos([]);
     setCompleteDialog(true);
   };
 
-  const renderOrderCard = (order: MyOrder) => (
-    <Card key={order.id} sx={{ mb: 1.5, borderLeft: '4px solid', borderColor: shipmentService.getStatusColor(order.status) + '.main' }}>
-      <CardContent sx={{ pb: '8px !important' }}>
-        <Typography variant="subtitle1">Ordine #{order.orderNumber}</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Cliente: {order.basin.client.name} - Bacino: {order.basin.code}
+  const renderOrderCard = (order: MyOrder, actions: React.ReactNode) => (
+    <Card key={order.id} variant="outlined" sx={{ mb: 2 }}>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>
+          Ordine #{order.orderNumber}
         </Typography>
+        
+        <Grid container spacing={2}>
+          <Grid item xs={12} sm={6}>
+            <Typography variant="body2" color="text.secondary">
+              <Business sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
+              Cliente: {order.basin.client.name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Bacino: {order.basin.code}
+            </Typography>
+          </Grid>
+          
+          <Grid item xs={12} sm={6}>
+            {order.scheduledDate && (
+              <Typography variant="body2" color="text.secondary">
+                <Schedule sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
+                {format(new Date(order.scheduledDate), 'dd/MM/yyyy HH:mm', { locale: it })}
+              </Typography>
+            )}
+            
+            {order.expectedQuantity && (
+              <Typography variant="body2" color="text.secondary">
+                <Scale sx={{ fontSize: 16, mr: 0.5, verticalAlign: 'middle' }} />
+                Qtà prevista: {order.expectedQuantity} colli
+              </Typography>
+            )}
+          </Grid>
+        </Grid>
+
         {order.logisticSender && (
-          <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-            <Business fontSize="small" sx={{ mr: 0.5 }} />Mittente: {order.logisticSender.name}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Da: {order.logisticSender.name}
           </Typography>
         )}
+        
         {order.logisticRecipient && (
-          <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-            <LocalShipping fontSize="small" sx={{ mr: 0.5 }} />Destinatario: {order.logisticRecipient.name}
+          <Typography variant="body2" color="text.secondary">
+            A: {order.logisticRecipient.name}
           </Typography>
         )}
-        <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-          <Schedule fontSize="small" sx={{ mr: 0.5 }} />Programmato: {order.scheduledDate ? format(new Date(order.scheduledDate), 'dd/MM/yyyy HH:mm', { locale: it }) : 'N/A'}
-        </Typography>
-        {order.expectedQuantity && (
-          <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-            <Assignment fontSize="small" sx={{ mr: 0.5 }} />Colli previsti: {order.expectedQuantity}
-          </Typography>
-        )}
-        {order.loadedPackages !== undefined && (
-          <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-            <Scale fontSize="small" sx={{ mr: 0.5 }} />Colli caricati: {order.loadedPackages}
-          </Typography>
-        )}
+        
         {order.specialInstructions && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontStyle: 'italic' }}>
-            Note: {order.specialInstructions}
-          </Typography>
+          <Alert severity="info" sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              <strong>Istruzioni:</strong> {order.specialInstructions}
+            </Typography>
+          </Alert>
         )}
-        <Chip label={shipmentService.formatStatus(order.status)} color={shipmentService.getStatusColor(order.status)} size="small" sx={{ mt: 1 }} />
       </CardContent>
-      <CardActions sx={{ p: 1, pt: 0, justifyContent: 'flex-end' }}>
-        {(order.status === 'PROGRAMMATO' || order.status === 'IN_EVASIONE') && (
-          <Button size="small" startIcon={<PlayArrow />} onClick={() => handleTakeCharge(order.id)}>
-            Prendi in Carico
-          </Button>
-        )}
-        {order.status === 'IN_CARICO' && (
-          <Button size="small" startIcon={<CheckCircle />} onClick={() => openCompleteDialog(order)}>
-            Completa Carico
-          </Button>
-        )}
+      
+      <CardActions>
+        {actions}
       </CardActions>
     </Card>
   );
 
+  if (loading) {
+    return (
+      <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Caricamento dashboard operatore...</Typography>
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container>
+        <Alert severity="error">{error}</Alert>
+        <Button onClick={fetchData} startIcon={<Refresh />} sx={{ mt: 2 }}>
+          Riprova
+        </Button>
+      </Container>
+    );
+  }
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Typography variant="h4" gutterBottom>
-        Dashboard Operatore Spedizioni
+        Dashboard Operatore
       </Typography>
 
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
-      {loading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-          <CircularProgress />
-        </Box>
-      )}
-
-      {!loading && (
-        <Grid container spacing={3}>
-          {/* Ordini Assegnati (Programmati) */}
-          <Grid item xs={12} md={6} lg={3}>
-            <Paper elevation={3} sx={{ p: 2, minHeight: '300px' }}>
-              <Box display="flex" alignItems="center" mb={2}>
-                <ListIcon color="info" sx={{ mr: 1 }} />
-                <Typography variant="h6">Programmati ({assignedOrders.length})</Typography>
-                <Badge badgeContent={assignedOrders.length} color="primary" sx={{ ml: 1 }} />
-              </Box>
-              {assignedOrders.length === 0 ? (
-                <Alert severity="info">Nessun ordine programmato.</Alert>
-              ) : (
-                assignedOrders.map(renderOrderCard)
-              )}
-            </Paper>
-          </Grid>
-
-          {/* Ordini Da Caricare (In Evasione) */}
-          <Grid item xs={12} md={6} lg={3}>
-            <Paper elevation={3} sx={{ p: 2, minHeight: '300px' }}>
-              <Box display="flex" alignItems="center" mb={2}>
-                <PlayArrow color="primary" sx={{ mr: 1 }} />
-                <Typography variant="h6">Da Caricare ({ordersToLoad.length})</Typography>
-                <Badge badgeContent={ordersToLoad.length} color="primary" sx={{ ml: 1 }} />
-              </Box>
-              {ordersToLoad.length === 0 ? (
-                <Alert severity="info">Nessun ordine da prendere in carico.</Alert>
-              ) : (
-                ordersToLoad.map(renderOrderCard)
-              )}
-            </Paper>
-          </Grid>
-
-          {/* Ordini In Carico */}
-          <Grid item xs={12} md={6} lg={3}>
-            <Paper elevation={3} sx={{ p: 2, minHeight: '300px' }}>
-              <Box display="flex" alignItems="center" mb={2}>
-                <LocalShipping color="warning" sx={{ mr: 1 }} />
-                <Typography variant="h6">In Carico ({ordersInProgress.length})</Typography>
-                <Badge badgeContent={ordersInProgress.length} color="warning" sx={{ ml: 1 }} />
-              </Box>
-              {ordersInProgress.length === 0 ? (
-                <Alert severity="info">Nessun ordine in corso di carico.</Alert>
-              ) : (
-                ordersInProgress.map(renderOrderCard)
-              )}
-            </Paper>
-          </Grid>
-
-          {/* Ordini Caricati */}
-          <Grid item xs={12} md={6} lg={3}>
-            <Paper elevation={3} sx={{ p: 2, minHeight: '300px' }}>
-              <Box display="flex" alignItems="center" mb={2}>
-                <CheckCircle color="success" sx={{ mr: 1 }} />
-                <Typography variant="h6">Caricati ({ordersLoaded.length})</Typography>
-                <Badge badgeContent={ordersLoaded.length} color="success" sx={{ ml: 1 }} />
-              </Box>
-              {ordersLoaded.length === 0 ? (
-                <Alert severity="info">Nessun ordine caricato.</Alert>
-              ) : (
-                ordersLoaded.map(renderOrderCard)
-              )}
-            </Paper>
-          </Grid>
+      {/* Statistiche rapide */}
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        <Grid item xs={6} md={3}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" color="info.main">
+                {ordersToLoad.length}
+              </Typography>
+              <Typography variant="h6" color="text.secondary">
+                Da Caricare
+              </Typography>
+            </CardContent>
+          </Card>
         </Grid>
-      )}
+        
+        <Grid item xs={6} md={3}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" color="primary.main">
+                {ordersInProgress.length}
+              </Typography>
+              <Typography variant="h6" color="text.secondary">
+                In Carico
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={6} md={3}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" color="success.main">
+                {ordersLoaded.length}
+              </Typography>
+              <Typography variant="h6" color="text.secondary">
+                Caricati
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        
+        <Grid item xs={6} md={3}>
+          <Card>
+            <CardContent sx={{ textAlign: 'center' }}>
+              <Typography variant="h4" color="warning.main">
+                {assignedOrders.length}
+              </Typography>
+              <Typography variant="h6" color="text.secondary">
+                Programmati
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
-      <Dialog open={completeDialog} onClose={() => setCompleteDialog(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Completa Carico: Ordine #{selectedOrder?.orderNumber}</DialogTitle>
+      {/* Sezioni ordini */}
+      <Grid container spacing={3}>
+        {/* Ordini in evasione */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom color="info.main">
+              Ordini da Caricare ({ordersToLoad.length})
+            </Typography>
+            {ordersToLoad.length === 0 ? (
+              <Alert severity="info">Nessun ordine disponibile per il carico.</Alert>
+            ) : (
+              ordersToLoad.map(order => renderOrderCard(
+                order,
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<PlayArrow />}
+                  onClick={() => handleTakeCharge(order.id)}
+                >
+                  Prendi in Carico
+                </Button>
+              ))
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Ordini in carico */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="h6" gutterBottom color="primary.main">
+              I Miei Ordini in Carico ({ordersInProgress.length})
+            </Typography>
+            {ordersInProgress.length === 0 ? (
+              <Alert severity="info">Nessun ordine in carico.</Alert>
+            ) : (
+              ordersInProgress.map(order => renderOrderCard(
+                order,
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<CheckCircle />}
+                  onClick={() => openCompleteDialog(order)}
+                >
+                  Completa Carico
+                </Button>
+              ))
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* Dialog completamento carico con foto */}
+      <Dialog 
+        open={completeDialog} 
+        onClose={() => !completing && setCompleteDialog(false)} 
+        fullWidth 
+        maxWidth="md"
+        disableEscapeKeyDown={completing}
+      >
+        <DialogTitle>
+          Completa Carico: Ordine #{selectedOrder?.orderNumber}
+        </DialogTitle>
         <DialogContent>
           {selectedOrder && (
-            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
               <TextField
                 label="Colli Caricati Effettivi"
                 type="number"
@@ -324,6 +443,7 @@ function ShipmentOperatorDashboard() {
                 onChange={(e) => setLoadedPackages(e.target.value)}
                 inputProps={{ min: 0 }}
                 helperText="Inserisci il numero di colli caricati"
+                disabled={completing}
               />
 
               <TextField
@@ -333,25 +453,49 @@ function ShipmentOperatorDashboard() {
                 multiline
                 rows={3}
                 placeholder="Eventuali note sul carico effettuato..."
+                disabled={completing}
               />
+
+              {/* Componente acquisizione foto */}
+              <PhotoCaptureComponent
+                onPhotosChange={setLoadingPhotos}
+                maxPhotos={10}
+                maxSizeMB={2}
+              />
+
+              {uploadingPhotos && (
+                <Alert severity="info" sx={{ display: 'flex', alignItems: 'center' }}>
+                  <CircularProgress size={20} sx={{ mr: 1 }} />
+                  Caricamento foto in corso...
+                </Alert>
+              )}
 
               <Alert severity="info">
                 <Typography variant="body2">
                   Una volta completato il carico, l'ordine passerà allo stato "Caricato" 
                   e sarà pronto per la finalizzazione da parte del manager.
+                  {loadingPhotos.length > 0 && (
+                    <><br />Le {loadingPhotos.length} foto verranno salvate nel sistema.</>
+                  )}
                 </Typography>
               </Alert>
             </Box>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCompleteDialog(false)}>Annulla</Button>
+          <Button 
+            onClick={() => setCompleteDialog(false)}
+            disabled={completing}
+          >
+            Annulla
+          </Button>
           <Button 
             onClick={handleCompleteLoading}
             variant="contained"
-            disabled={completing}
+            disabled={completing || uploadingPhotos}
+            startIcon={completing ? <CircularProgress size={20} /> : <CheckCircle />}
           >
-            {completing ? 'Completando...' : 'Completa Carico'}
+            {completing ? 'Completando...' : `Completa Carico${loadingPhotos.length > 0 ? ` (+${loadingPhotos.length} foto)` : ''}`}
           </Button>
         </DialogActions>
       </Dialog>

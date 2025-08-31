@@ -1,10 +1,12 @@
-// server/src/modules/pickupOrders/services/workflow.service.ts - VERSIONE CON DEBUG AVANZATO
+// server/src/modules/pickupOrders/services/workflow.service.ts - VERSIONE FINALE E FUNZIONALE
 
 import { PrismaClient } from '@prisma/client';
 import { HttpException } from '../../../core/middleware/error.middleware';
+import { Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Enum per gli stati dei pickup order
 export enum PickupOrderStatus {
   DA_EVADERE = 'DA_EVADERE',
   PROGRAMMATO = 'PROGRAMMATO',
@@ -16,7 +18,8 @@ export enum PickupOrderStatus {
   CANCELLED = 'CANCELLED'
 }
 
-export interface ChangeStatusRequest {
+// Interface per la richiesta di cambio stato
+export interface ChangeStatusParams {
   pickupOrderId: string;
   newStatus: PickupOrderStatus;
   userId: string;
@@ -26,6 +29,7 @@ export interface ChangeStatusRequest {
   additionalData?: Record<string, unknown>;
 }
 
+// Interface per i dati di attività dell'operatore
 export interface OperatorActivityData {
   activityType: string;
   description?: string;
@@ -35,46 +39,47 @@ export interface OperatorActivityData {
   notes?: string;
 }
 
-// Transizioni reversibili complete
-const validateStatusTransition = (currentStatus: string, newStatus: PickupOrderStatus): boolean => {
+/**
+ * Validates the status transition for a pickup order.
+ * @param currentStatus The current status of the order.
+ * @param newStatus The new status to transition to.
+ * @returns An object indicating if the transition is valid and a message.
+ */
+const validateStatusTransition = (currentStatus: string, newStatus: PickupOrderStatus): { valid: boolean, message: string } => {
   console.log(`🔍 Validazione transizione: ${currentStatus} → ${newStatus}`);
-  
+
   const allowedTransitions: Record<string, PickupOrderStatus[]> = {
     [PickupOrderStatus.DA_EVADERE]: [
-      PickupOrderStatus.PROGRAMMATO, 
+      PickupOrderStatus.PROGRAMMATO,
       PickupOrderStatus.CANCELLED
     ],
     [PickupOrderStatus.PROGRAMMATO]: [
-      PickupOrderStatus.IN_EVASIONE, 
-      PickupOrderStatus.DA_EVADERE,  // ← REVERSIBILE
+      PickupOrderStatus.IN_EVASIONE,
+      PickupOrderStatus.DA_EVADERE,
       PickupOrderStatus.IN_CARICO,
       PickupOrderStatus.CANCELLED
     ],
     [PickupOrderStatus.IN_EVASIONE]: [
-      PickupOrderStatus.IN_CARICO, 
-      PickupOrderStatus.PROGRAMMATO, // ← REVERSIBILE
+      PickupOrderStatus.IN_CARICO,
+      PickupOrderStatus.PROGRAMMATO,
       PickupOrderStatus.CANCELLED
     ],
     [PickupOrderStatus.IN_CARICO]: [
-      PickupOrderStatus.CARICATO, 
-      PickupOrderStatus.IN_EVASIONE, // ← REVERSIBILE
+      PickupOrderStatus.CARICATO,
+      PickupOrderStatus.IN_EVASIONE,
       PickupOrderStatus.CANCELLED
     ],
     [PickupOrderStatus.CARICATO]: [
-      PickupOrderStatus.SPEDITO, 
-      PickupOrderStatus.IN_CARICO,   // ← REVERSIBILE
+      PickupOrderStatus.SPEDITO,
+      PickupOrderStatus.IN_CARICO,
       PickupOrderStatus.CANCELLED
     ],
     [PickupOrderStatus.SPEDITO]: [
-      PickupOrderStatus.COMPLETO, 
-      PickupOrderStatus.CARICATO     // ← REVERSIBILE
+      PickupOrderStatus.COMPLETO,
+      PickupOrderStatus.CARICATO
     ],
-    [PickupOrderStatus.COMPLETO]: [
-      // Stato finale - nessuna transizione permessa
-    ],
-    [PickupOrderStatus.CANCELLED]: [
-      // Stato finale - nessuna transizione permessa
-    ]
+    [PickupOrderStatus.COMPLETO]: [],
+    [PickupOrderStatus.CANCELLED]: []
   };
 
   const allowedForCurrent = allowedTransitions[currentStatus] || [];
@@ -83,7 +88,37 @@ const validateStatusTransition = (currentStatus: string, newStatus: PickupOrderS
   console.log(`📋 Transizioni permesse per ${currentStatus}:`, allowedForCurrent);
   console.log(`✅ Transizione ${currentStatus} → ${newStatus} è ${isValid ? 'VALIDA' : 'NON VALIDA'}`);
   
-  return isValid;
+  if (!isValid) {
+    return { valid: false, message: `Transizione di stato da ${currentStatus} a ${newStatus} non valida.` };
+  }
+  
+  return { valid: true, message: 'Transizione valida.' };
+};
+
+/**
+ * Maps a status to an operator activity type.
+ * @param status The PickupOrderStatus.
+ * @returns The corresponding activity type string.
+ */
+const getActivityTypeForStatus = (status: PickupOrderStatus): string => {
+  switch (status) {
+    case PickupOrderStatus.PROGRAMMATO:
+      return 'SCHEDULED';
+    case PickupOrderStatus.IN_EVASIONE:
+      return 'STARTED_EVADING';
+    case PickupOrderStatus.IN_CARICO:
+      return 'ASSIGNED_TO_OPERATOR';
+    case PickupOrderStatus.CARICATO:
+      return 'LOADING_COMPLETED';
+    case PickupOrderStatus.SPEDITO:
+      return 'SHIPPED';
+    case PickupOrderStatus.COMPLETO:
+      return 'COMPLETED';
+    case PickupOrderStatus.CANCELLED:
+      return 'CANCELLED';
+    default:
+      return 'STATUS_CHANGE';
+  }
 };
 
 export const checkPermission = (userRole: string, operation: string): boolean => {
@@ -99,244 +134,241 @@ export const checkPermission = (userRole: string, operation: string): boolean =>
 };
 
 /**
- * CORREZIONE: Cambia lo stato con debug avanzato e gestione errori robusta
+ * Changes the status of a pickup order with advanced debugging and robust error handling.
  */
-export const changePickupOrderStatus = async (request: ChangeStatusRequest): Promise<Record<string, unknown>> => {
-  const { pickupOrderId, newStatus, userId, reason, notes, additionalData } = request;
+export const changePickupOrderStatus = async (params: ChangeStatusParams): Promise<Prisma.PickupOrderGetPayload<{
+    include: {
+        basin: {
+            include: {
+                client: true;
+            };
+        };
+        assignedOperator: true;
+    };
+}>> => {
+  const {
+    pickupOrderId,
+    newStatus,
+    userId,
+    reason,
+    notes,
+    additionalData
+  } = params;
 
-  console.log(`🔄 === INIZIO CAMBIO STATO ===`);
-  console.log(`📋 Ordine: ${pickupOrderId}`);
-  console.log(`👤 Utente: ${userId}`);
-  console.log(`🎯 Nuovo stato: ${newStatus}`);
-  console.log(`💾 Dati aggiuntivi:`, additionalData);
+  // Usa l'optional chaining con il nullish coalescing per un accesso sicuro
+  const photosArray = (additionalData?.loadingPhotos as string[] | undefined) ?? [];
+  const photoCount = photosArray.length;
+
+  console.log(`🔄 Cambio stato pickup order ${pickupOrderId}:`, {
+    newStatus,
+    reason,
+    hasPhotos: photoCount > 0,
+    photoCount
+  });
 
   try {
-    // Trova il buono di ritiro
-    console.log(`🔍 Ricerca buono di ritiro...`);
-    const pickupOrder = await prisma.pickupOrder.findUnique({
-      where: { id: pickupOrderId },
-      include: {
-        assignedOperator: true,
-        basin: true,
-        logisticSender: true,
-        logisticRecipient: true
-      }
-    });
-
-    if (!pickupOrder) {
-      console.error(`❌ Buono di ritiro non trovato: ${pickupOrderId}`);
-      throw new HttpException(404, 'Buono di ritiro non trovato');
-    }
-
-    console.log(`📋 Buono trovato - Stato attuale: ${pickupOrder.status}`);
-
-    // Valida la transizione di stato
-    if (!validateStatusTransition(pickupOrder.status, newStatus)) {
-      console.error(`❌ Transizione non valida: ${pickupOrder.status} → ${newStatus}`);
-      throw new HttpException(400, `Transizione non valida da ${pickupOrder.status} a ${newStatus}`);
-    }
-
-    // Prepara i dati di aggiornamento
-    const updateData: Record<string, unknown> = {
-      status: newStatus,
-      updatedAt: new Date()
-    };
-
-    console.log(`🔧 Preparazione dati aggiornamento per stato: ${newStatus}`);
-
-    // Gestione dati specifici per stato e rollback
-    if (additionalData) {
-      console.log(`💾 Processamento dati aggiuntivi...`);
-      
-      switch (newStatus) {
-        case PickupOrderStatus.PROGRAMMATO: {
-          const scheduledDate = additionalData.scheduledDate as Date;
-          const loadingDate = additionalData.loadingDate as Date;
-          if (scheduledDate) updateData.scheduledDate = scheduledDate;
-          if (loadingDate) updateData.loadingDate = loadingDate;
-          
-          // ROLLBACK: Reset campi successivi se torniamo indietro
-          if (pickupOrder.status !== 'DA_EVADERE') {
-            updateData.assignedOperatorId = null;
-            updateData.loadedPackages = null;
-            updateData.departureWeight = null;
-            updateData.arrivalWeight = null;
-            updateData.unloadingDate = null;
-            updateData.completionDate = null;
-          }
-          break;
-        }
-
-        case PickupOrderStatus.IN_EVASIONE: {
-          // ROLLBACK: Reset operatore e dati successivi se torniamo indietro
-          if (pickupOrder.status !== 'PROGRAMMATO') {
-            updateData.assignedOperatorId = null;
-            updateData.loadedPackages = null;
-            updateData.departureWeight = null;
-            updateData.arrivalWeight = null;
-            updateData.unloadingDate = null;
-            updateData.completionDate = null;
-          }
-          break;
-        }
-
-        case PickupOrderStatus.IN_CARICO: {
-          const operatorData = additionalData.operatorId as string;
-          console.log(`👤 Operatore da assegnare:`, operatorData);
-          
-          if (operatorData) {
-            updateData.assignedOperatorId = operatorData;
-            console.log(`✅ Operatore assegnato: ${operatorData}`);
-          } else if (additionalData.operatorId === null) {
-            // ROLLBACK: Rimuovi operatore
-            updateData.assignedOperatorId = null;
-            console.log(`🔄 Operatore rimosso (rollback)`);
-          }
-          
-          // ROLLBACK: Reset dati successivi se torniamo indietro
-          if (pickupOrder.status !== 'IN_EVASIONE') {
-            updateData.loadedPackages = null;
-            updateData.departureWeight = null;
-            updateData.arrivalWeight = null;
-            updateData.unloadingDate = null;
-            updateData.completionDate = null;
-          }
-          break;
-        }
-
-        case PickupOrderStatus.CARICATO: {
-          const packagesData = additionalData.packageCount as number;
-          if (packagesData !== undefined) {
-            updateData.loadedPackages = packagesData;
-            console.log(`📦 Colli caricati: ${packagesData}`);
-          } else if (additionalData.packageCount === null) {
-            // ROLLBACK: Reset numero colli
-            updateData.loadedPackages = null;
-            console.log(`🔄 Colli resettati (rollback)`);
-          }
-          
-          // ROLLBACK: Reset dati successivi se torniamo indietro
-          if (pickupOrder.status !== 'IN_CARICO') {
-            updateData.departureWeight = null;
-            updateData.arrivalWeight = null;
-            updateData.unloadingDate = null;
-            updateData.completionDate = null;
-          }
-          break;
-        }
-
-        case PickupOrderStatus.SPEDITO: {
-          const weightData = additionalData.departureWeight as number;
-          if (weightData) {
-            updateData.departureWeight = weightData;
-            updateData.unloadingDate = new Date();
-          } else if (additionalData.departureWeight === null) {
-            // ROLLBACK: Reset peso e data
-            updateData.departureWeight = null;
-            updateData.unloadingDate = null;
-          }
-          
-          // ROLLBACK: Reset dati successivi se torniamo indietro
-          if (pickupOrder.status !== 'CARICATO') {
-            updateData.arrivalWeight = null;
-            updateData.completionDate = null;
-            updateData.isRejected = false;
-            updateData.rejectionReason = null;
-            updateData.rejectionDate = null;
-          }
-          break;
-        }
-
-        case PickupOrderStatus.COMPLETO: {
-          const arrivalWeightData = additionalData.arrivalWeight as number;
-          const isRejectedData = additionalData.isRejected as boolean;
-          const rejectionReasonData = additionalData.rejectionReason as string;
-
-          if (arrivalWeightData !== undefined) {
-            updateData.arrivalWeight = arrivalWeightData;
-          }
-          updateData.isRejected = isRejectedData || false;
-          if (rejectionReasonData) {
-            updateData.rejectionReason = rejectionReasonData;
-            updateData.rejectionDate = new Date();
-          }
-          updateData.completionDate = new Date();
-          break;
-        }
-
-        case PickupOrderStatus.CANCELLED: {
-          updateData.isRejected = true;
-          updateData.rejectionReason = reason || 'Ordine cancellato';
-          updateData.rejectionDate = new Date();
-          break;
-        }
-      }
-    }
-
-    console.log('📝 Dati aggiornamento finali:', updateData);
-
-    // Aggiorna il buono di ritiro
-    console.log(`💾 Aggiornamento buono di ritiro...`);
-    const updatedOrder = await prisma.pickupOrder.update({
-      where: { id: pickupOrderId },
-      data: updateData,
-      include: {
-        assignedOperator: true,
-        basin: true,
-        logisticSender: true,
-        logisticRecipient: true
-      }
-    });
-
-    console.log(`✅ Buono di ritiro aggiornato con successo`);
-
-    // Registra il cambio di stato nello storico (con try-catch separato)
-    try {
-      console.log(`📚 Tentativo registrazione storico...`);
-      await prisma.pickupOrderStatusHistory.create({
-        data: {
-          pickupOrderId,
-          fromStatus: pickupOrder.status,
-          toStatus: newStatus,
-          changedAt: new Date(),
-          changedBy: userId,
-          reason: reason || `Cambio stato da ${pickupOrder.status} a ${newStatus}`,
-          notes
+    const result = await prisma.$transaction(async (tx) => {
+      // Get the current pickup order
+      const currentOrder = await tx.pickupOrder.findUnique({
+        where: { id: pickupOrderId },
+        include: {
+          basin: { include: { client: true } },
+          assignedOperator: true
         }
       });
-      console.log(`✅ Storico registrato con successo`);
-    } catch (historyError) {
-      console.warn('⚠️ StatusHistory table not found or error, skipping history record:', historyError);
-    }
 
-    console.log(`✅ === CAMBIO STATO COMPLETATO ===`);
-    console.log(`📋 Stato finale: ${pickupOrder.status} → ${newStatus}`);
+      if (!currentOrder) {
+        throw new HttpException(404, 'Pickup order non trovato');
+      }
 
-    return updatedOrder;
+      // Validate the status transition
+      const isValidTransition = validateStatusTransition(currentOrder.status, newStatus);
+      if (!isValidTransition.valid) {
+        throw new HttpException(400, isValidTransition.message);
+      }
 
+      // Prepare update data
+      const updateData: Prisma.PickupOrderUpdateInput = {
+        status: newStatus,
+      };
+
+      // Specific handling for CARICATO status
+      if (newStatus === PickupOrderStatus.CARICATO && additionalData) {
+        if (additionalData.packageCount !== undefined) {
+          updateData.loadedPackages = additionalData.packageCount as number;
+        }
+        if (additionalData.loadingPhotos) {
+          updateData.loadingPhotos = photosArray.join(',');
+        }
+        updateData.loadingDate = new Date();
+      }
+
+      // Other status handling
+      if (newStatus === PickupOrderStatus.PROGRAMMATO && additionalData) {
+        if (additionalData.scheduledDate) {
+          updateData.scheduledDate = new Date(additionalData.scheduledDate as string);
+        }
+      }
+
+      if (newStatus === PickupOrderStatus.IN_CARICO && additionalData) {
+        if (additionalData.operatorId) {
+          updateData.assignedOperator = {
+            connect: { id: additionalData.operatorId as string },
+          };
+          updateData.operatorAssignedAt = new Date();
+        }
+      }
+
+      // Update the pickup order
+      const updatedOrder = await tx.pickupOrder.update({
+        where: { id: pickupOrderId },
+        data: updateData,
+        include: {
+          basin: { include: { client: true } },
+          assignedOperator: true
+        }
+      });
+
+      // Log the status change in the history
+      await tx.pickupOrderStatusHistory.create({
+        data: {
+          pickupOrderId,
+          fromStatus: currentOrder.status,
+          toStatus: newStatus,
+          changedBy: userId,
+          reason,
+          notes,
+          changedAt: new Date()
+        }
+      });
+      
+      // Record operator activity
+      const videosArray = (additionalData?.videos as string[] | undefined) ?? [];
+      await tx.operatorActivity.create({
+        data: {
+          pickupOrderId,
+          operatorId: userId,
+          activityType: getActivityTypeForStatus(newStatus),
+          description: `${reason || 'Status change'}${
+            photoCount > 0 ? ` (${photoCount} foto)` : ''
+          }`,
+          notes,
+          packageCount: additionalData?.packageCount as number | undefined,
+          photos: photosArray.length > 0 ? photosArray.join(',') : null,
+          videos: videosArray.length > 0 ? videosArray.join(',') : null,
+        }
+      });
+      
+      console.log(`✅ Stato cambiato con successo: ${currentOrder.status} → ${newStatus}`, {
+        orderId: pickupOrderId,
+        photoCount: photoCount
+      });
+      
+      return updatedOrder;
+    });
+
+    return result;
   } catch (error) {
-    console.error(`❌ === ERRORE DURANTE CAMBIO STATO ===`);
-    console.error(`📋 Ordine: ${pickupOrderId}`);
-    console.error(`🎯 Stato desiderato: ${newStatus}`);
-    console.error(`❌ Errore:`, error);
-    
-    if (error instanceof HttpException) {
-      throw error;
-    }
-    
-    const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto durante il cambio stato';
-    throw new HttpException(500, `Errore interno durante il cambio stato: ${errorMessage}`);
+    console.error(`❌ Errore cambio stato ${pickupOrderId}:`, error);
+    throw error;
   }
 };
 
 /**
- * Registra attività operatore - CON GESTIONE ERRORI ROBUSTA
+ * Get photos associated with a pickup order.
+ */
+export const getPickupOrderPhotos = async (pickupOrderId: string): Promise<{
+    id: string;
+    url: string;
+    type: string;
+    uploadedAt: Date;
+}[]> => {
+  try {
+    const order = await prisma.pickupOrder.findUnique({
+      where: { id: pickupOrderId },
+      select: {
+        loadingPhotos: true,
+      }
+    });
+
+    if (!order?.loadingPhotos) {
+      return [];
+    }
+
+    const photoUrls = (order.loadingPhotos as string).split(',').filter(url => url.trim());
+
+    return photoUrls.map((url, index) => ({
+      id: `photo_${index}`,
+      url: url.trim(),
+      type: 'loading-photo',
+      uploadedAt: new Date()
+    }));
+  } catch (error) {
+    console.error('Errore recupero foto pickup order:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a photo from a pickup order.
+ */
+export const removePickupOrderPhoto = async (
+  pickupOrderId: string,
+  photoUrl: string,
+  userId: string
+): Promise<void> => {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.pickupOrder.findUnique({
+        where: { id: pickupOrderId }
+      });
+
+      if (!order?.loadingPhotos) {
+        throw new HttpException(404, 'Nessuna foto trovata per questo ordine');
+      }
+
+      const photoUrls = (order.loadingPhotos as string).split(',');
+      const filteredUrls = photoUrls.filter(url => url.trim() !== photoUrl.trim());
+
+      await tx.pickupOrder.update({
+        where: { id: pickupOrderId },
+        data: {
+          loadingPhotos: filteredUrls.length > 0 ? filteredUrls.join(',') : null,
+        }
+      });
+
+      await tx.operatorActivity.create({
+        data: {
+          pickupOrderId,
+          operatorId: userId,
+          activityType: 'PHOTO_REMOVED',
+          description: 'Foto rimossa dall\'ordine',
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Errore rimozione foto:', error);
+    throw error;
+  }
+};
+
+/**
+ * Record operator activity with robust error handling.
  */
 export const recordOperatorActivity = async (
   pickupOrderId: string,
   operatorId: string,
   activityData: OperatorActivityData
-): Promise<Record<string, unknown>> => {
+): Promise<Prisma.OperatorActivityGetPayload<{
+    include: {
+        operator: {
+            select: {
+                firstName: true;
+                lastName: true;
+            };
+        };
+    };
+}>> => {
   try {
     console.log(`🎬 === REGISTRAZIONE ATTIVITÀ OPERATORE ===`);
     console.log(`📋 Ordine: ${pickupOrderId}`);
@@ -351,7 +383,6 @@ export const recordOperatorActivity = async (
       throw new HttpException(404, 'Buono di ritiro non trovato');
     }
 
-    // Crea l'attività
     const activity = await prisma.operatorActivity.create({
       data: {
         pickupOrderId,
@@ -361,8 +392,8 @@ export const recordOperatorActivity = async (
         timestamp: new Date(),
         packageCount: activityData.packageCount,
         notes: activityData.notes,
-        photos: activityData.photos ? JSON.stringify(activityData.photos) : undefined,
-        videos: activityData.videos ? JSON.stringify(activityData.videos) : undefined
+        photos: activityData.photos ? activityData.photos.join(',') : null,
+        videos: activityData.videos ? activityData.videos.join(',') : null
       },
       include: {
         operator: {
@@ -376,7 +407,7 @@ export const recordOperatorActivity = async (
 
     console.log(`✅ Attività registrata con successo`);
     return activity;
-    
+
   } catch (error) {
     console.error(`❌ Errore durante registrazione attività:`, error);
     throw error;
@@ -384,9 +415,15 @@ export const recordOperatorActivity = async (
 };
 
 /**
- * Ottiene operatori disponibili
+ * Get available operators.
  */
-export const getAvailableOperators = async (): Promise<Record<string, unknown>[]> => {
+export const getAvailableOperators = async (): Promise<{
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    role: string;
+}[]> => {
   try {
     const operators = await prisma.user.findMany({
       where: {
@@ -414,10 +451,10 @@ export const getAvailableOperators = async (): Promise<Record<string, unknown>[]
 };
 
 /**
- * Ottiene storico completo di un buono di ritiro
+ * Get full history of a pickup order.
  */
-export const getPickupOrderHistory = async (pickupOrderId: string): Promise<Record<string, unknown>> => {
-  let statusHistory: Record<string, unknown>[] = [];
+export const getPickupOrderHistory = async (pickupOrderId: string): Promise<{ statusHistory: unknown[]; operatorActivities: unknown[]; }> => {
+  let statusHistory: unknown[] = [];
   try {
     statusHistory = await prisma.pickupOrderStatusHistory.findMany({
       where: { pickupOrderId },
@@ -427,7 +464,7 @@ export const getPickupOrderHistory = async (pickupOrderId: string): Promise<Reco
     console.warn('⚠️ PickupOrderStatusHistory table not found, returning empty history');
   }
 
-  let operatorActivities: Record<string, unknown>[] = [];
+  let operatorActivities: unknown[] = [];
   try {
     operatorActivities = await prisma.operatorActivity.findMany({
       where: { pickupOrderId },
@@ -452,18 +489,18 @@ export const getPickupOrderHistory = async (pickupOrderId: string): Promise<Reco
 };
 
 /**
- * Ottiene statistiche del workflow
+ * Get workflow statistics.
  */
 export const getWorkflowStats = async (
   dateFrom?: Date,
   dateTo?: Date
 ): Promise<Record<string, unknown>> => {
-  const whereClause: Record<string, unknown> = {};
+  const whereClause: Prisma.PickupOrderWhereInput = {};
 
   if (dateFrom || dateTo) {
     whereClause.createdAt = {};
-    if (dateFrom) (whereClause.createdAt as Record<string, unknown>).gte = dateFrom;
-    if (dateTo) (whereClause.createdAt as Record<string, unknown>).lte = dateTo;
+    if (dateFrom) whereClause.createdAt.gte = dateFrom;
+    if (dateTo) whereClause.createdAt.lte = dateTo;
   }
 
   const statusDistribution = await prisma.pickupOrder.groupBy({
@@ -481,8 +518,8 @@ export const getWorkflowStats = async (
   const averageTimesPerStatus: Record<string, number> = {};
 
   return {
-    statusDistribution: statusDistribution.reduce((acc: Record<string, number>, item: Record<string, unknown>) => {
-      acc[item.status as string] = (item._count as Record<string, number>).id;
+    statusDistribution: statusDistribution.reduce((acc: Record<string, number>, item) => {
+      acc[item.status] = item._count.id;
       return acc;
     }, {}),
     totalOrders,
